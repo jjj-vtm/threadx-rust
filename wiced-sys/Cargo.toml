@@ -1,0 +1,19 @@
+[package]
+name = "wiced-sys"
+version = "0.2.1"
+authors = ["Jan Jongen <jan.jongen@valtech.com>"]
+edition = "2021"
+description = "Rust bindings for Wiced MXAZ3166"
+build = "build.rs"
+links = "wiced_sdk_bin"
+license-file = "LICENSE"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+cmake = "0.1.50"
+bindgen = "0.69.1"
+
+[dependencies]
+
+
