@@ -18,6 +18,7 @@ VOID        _tx_time_set(ULONG new_time);
 */
 
 use crate::time::TxTicks;
+use core::ffi::c_void;
 use core::ffi::CStr;
 
 use super::error::TxError;
@@ -33,15 +34,15 @@ type TimerCallbackType = unsafe extern "C" fn(ULONG);
 
 unsafe extern "C" fn timer_callback_trampoline<F>(arg: ULONG)
 where
-    F: Fn(ULONG),
+    F: Fn(),
 {
     let closure = &mut *(arg as *mut F);
-    closure(arg);
+    closure();
 }
 
-fn get_trampoline<F>(closure_: &F) -> TimerCallbackType
+fn get_trampoline<F>(closure: &F) -> TimerCallbackType
 where
-    F: Fn(ULONG),
+    F: Fn(),
 {
     timer_callback_trampoline::<F>
 }
@@ -52,12 +53,12 @@ impl Timer {
     pub const fn new() -> Self {
         Timer(MaybeUninit::uninit())
     }
-
-    pub fn initialize<F: Fn(ULONG)>(
+    /// Using a closure we need the ULONG arg t_expiration_inpu to trampoline so you cannot use it directly
+    pub fn initialize_with_closure<F: Fn()>(
         &'static mut self,
         name: &CStr,
-        expiration_function: F,
-        expiration_input: ULONG,
+        mut expiration_function: F,
+        _expiration_input: ULONG,
         initial_ticks: core::time::Duration,
         reschedule_ticks: core::time::Duration,
         auto_activate: bool,
@@ -65,7 +66,10 @@ impl Timer {
         let timer = self.0.as_mut_ptr();
 
         //convert to a ULONG
+        
         let trampoline = get_trampoline(&expiration_function);
+        let mut expiration_function_ptr = &mut expiration_function as *mut _ as *mut c_void;
+        let expiration_function_arg = expiration_function_ptr as ULONG;
 
         let initial_ticks = TxTicks::from(initial_ticks).into();
         let reschedule_ticks = TxTicks::from(reschedule_ticks).into();
@@ -76,7 +80,7 @@ impl Timer {
                 timer,
                 name.as_ptr() as *mut i8,
                 Some(trampoline),
-                expiration_input,
+                expiration_function_arg,
                 initial_ticks,
                 reschedule_ticks,
                 auto_activate,

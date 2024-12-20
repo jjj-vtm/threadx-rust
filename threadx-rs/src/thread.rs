@@ -13,9 +13,8 @@ use super::error::TxError;
 use defmt::error;
 use num_traits::FromPrimitive;
 
-pub struct Thread<STATE> {
+pub struct Thread {
     tx_struct: MaybeUninit<TX_THREAD>,
-    state: PhantomData<STATE>,
 }
 
 pub struct ThreadHandle<STATE> {
@@ -30,11 +29,10 @@ pub struct Stopped;
 
 type TxThreadEntry = unsafe extern "C" fn(ULONG);
 
-impl<STATE> Thread<STATE> {
-    pub const fn new() -> Thread<UnInitialized> {
+impl Thread {
+    pub const fn new() -> Thread {
         Thread {
             tx_struct: core::mem::MaybeUninit::uninit(),
-            state: PhantomData::<UnInitialized>,
         }
     }
 }
@@ -54,7 +52,7 @@ where
     thread_trampoline::<F>
 }
 
-impl Thread<UnInitialized> {
+impl Thread {
     pub fn initialize_with_autostart<F: Fn()>(
         &'static mut self,
         name: &str,
@@ -141,7 +139,7 @@ impl Thread<UnInitialized> {
         preempt_threshold: u32,
         time_slice: u32,
         auto_start: bool,
-    ) -> Result<Thread<Running>, TxError> {
+    ) -> Result<Thread, TxError> {
         // check if already initialized.
         let s = unsafe { &*self.tx_struct.as_ptr() };
         if !s.tx_thread_name.is_null() {
@@ -162,7 +160,6 @@ impl Thread<UnInitialized> {
         ))
         .map(|_| Thread {
             tx_struct: self.tx_struct,
-            state: PhantomData::<Running>,
         })
     }
 }
@@ -187,7 +184,7 @@ impl ThreadHandle<Running> {
     }
 }
 
-impl<STATE> ThreadHandle <STATE>{
+impl<STATE> ThreadHandle<STATE> {
     /// Deletes the thread. You need to pass ownership
     /// of the thread handle to this function.
     pub fn delete(self) -> Result<(), TxError> {

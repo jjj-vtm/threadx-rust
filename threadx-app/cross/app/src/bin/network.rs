@@ -45,9 +45,8 @@ fn main() -> ! {
             static WIFI_THREAD_STACK: StaticCell<[u8; 8192]> = StaticCell::new();
             let wifi_thread_stack: *mut [u8; 8192] = WIFI_THREAD_STACK.uninit().as_mut_ptr();
 
-            static WIFI_THREAD: StaticCell<Thread<thread::UnInitialized>> = StaticCell::new();
-            let wifi_thread: &mut Thread<thread::UnInitialized> =
-                WIFI_THREAD.init(Thread::<thread::UnInitialized>::new());
+            static WIFI_THREAD: StaticCell<Thread> = StaticCell::new();
+            let wifi_thread: &'static mut Thread = WIFI_THREAD.init(Thread::new());
 
             let _ = wifi_thread
                 .initialize_with_autostart("wifi_thread", do_network, wifi_thread_stack, 4, 4, 0)
@@ -89,7 +88,7 @@ fn start_clock() -> impl Clock {
 
     let clock_name = CStr::from_bytes_until_nul(b"clock_timer_mqtt\0").unwrap();
     let _ = clock_timer
-        .initialize(
+        .initialize_with_closure(
             clock_name,
             clock_tick,
             0,

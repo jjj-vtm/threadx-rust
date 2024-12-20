@@ -2,11 +2,9 @@ use core::{
     ffi::c_void,
     mem::MaybeUninit,
     net::Ipv4Addr,
-    ptr::{self, null_mut},
+    ptr::{self},
 };
 
-use defmt::println;
-use heapless::Vec;
 use minimq::embedded_nal::{TcpClientStack, TcpError};
 use netx_sys::*;
 use static_cell::StaticCell;

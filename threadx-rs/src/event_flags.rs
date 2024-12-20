@@ -13,7 +13,7 @@ use crate::tx_checked_call;
 use super::error::TxError;
 use super::WaitOption;
 use defmt::error;
-use defmt::{debug, println, trace};
+use defmt::trace;
 use num_traits::FromPrimitive;
 
 #[derive(Copy, Clone)]
@@ -32,51 +32,55 @@ pub enum SetOption {
     SetAny = threadx_sys::TX_OR,
 }
 
-pub struct EventFlagsGroup<STATE> {
+pub struct EventFlagsGroup{
     flag_group: MaybeUninit<TX_EVENT_FLAGS_GROUP>,
-    _state: PhantomData<STATE>,
+}
+#[derive(Copy, Clone)]
+pub struct EventFlagsGroupHandle {
+    pub flag_group_ptr: *mut TX_EVENT_FLAGS_GROUP,
 }
 
-struct Uninitialized;
-struct Initialized;
+pub struct UnInitialized;
+pub struct Initialized;
 
-impl<STATE> EventFlagsGroup<STATE> {
-    pub const fn new() -> EventFlagsGroup<Uninitialized> {
+impl EventFlagsGroup{
+    pub const fn new() -> EventFlagsGroup {
         EventFlagsGroup {
             flag_group: core::mem::MaybeUninit::uninit(),
-            _state: PhantomData::<Uninitialized>,
         }
     }
 }
 
-impl EventFlagsGroup<Uninitialized> {
-    pub fn initialize(&'static mut self, name: &CStr) -> Result<(), TxError> {
+impl EventFlagsGroup {
+    // Since this takes a mut borrow for 'static it cannot be initialized twice.
+    pub fn initialize(&'static mut self, name: &CStr) -> Result<EventFlagsGroupHandle, TxError> {
         let group_ptr = self.flag_group.as_mut_ptr();
 
-        trace!("EventFlagsGroup::initialize: ptr is: {}", group_ptr);
+        defmt::println!("EventFlagsGroup::initialize: ptr is: {}", group_ptr);
         tx_checked_call!(_tx_event_flags_create(group_ptr, name.as_ptr() as *mut i8))?;
-        Ok(())
+        Ok(EventFlagsGroupHandle {
+            flag_group_ptr: group_ptr,
+        })
     }
 }
 
-impl EventFlagsGroup<Initialized> {
-    pub fn publish(&mut self, flags_to_set: u32) -> Result<(), TxError> {
-        let group_ptr = self.flag_group.as_mut_ptr();
+impl EventFlagsGroupHandle {
+    pub fn publish(& self, flags_to_set: u32) -> Result<(), TxError> {
+        defmt::println!("Publish: ptr is: {}", self.flag_group_ptr);
 
-        tx_checked_call!(_tx_event_flags_set(group_ptr, flags_to_set, 0))
+        Ok(())
+        //tx_checked_call!(_tx_event_flags_set(self.flag_group_ptr, flags_to_set, 0))
     }
 
     pub fn get(
-        & mut self,
+        & self,
         requested_flags: u32,
         get_option: GetOption,
         wait_option: WaitOption,
     ) -> Result<u32, TxError> {
-        let group_ptr = self.flag_group.as_mut_ptr();
-
         let mut actual_flags = 0u32;
         tx_checked_call!(_tx_event_flags_get(
-            group_ptr,
+            self.flag_group_ptr,
             requested_flags,
             get_option as ULONG,
             &mut actual_flags,
