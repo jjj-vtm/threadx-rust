@@ -1,13 +1,6 @@
 use core::time::Duration;
 
-use threadx_sys::{TX_TIMER_TICKS_PER_SECOND, _tx_thread_sleep};
-
-use crate::tx_checked_call;
-
-use super::error::TxError;
-use defmt::debug;
-use defmt::error;
-use num_traits::FromPrimitive;
+use threadx_sys::TX_TIMER_TICKS_PER_SECOND;
 
 pub struct TxTicks(u32);
 

@@ -18,19 +18,12 @@ VOID        _tx_time_set(ULONG new_time);
 */
 
 use crate::time::TxTicks;
-use crate::tx_checked_call;
-use core::ffi::c_void;
 use core::ffi::CStr;
-use core::ptr;
 
 use super::error::TxError;
-use super::WaitOption;
-use defmt::debug;
-use defmt::error;
-use defmt::println;
 use num_traits::FromPrimitive;
-use thiserror_no_std::Error;
 use threadx_sys::_tx_timer_create;
+use threadx_sys::TX_SUCCESS;
 use threadx_sys::ULONG;
 
 use core::mem::MaybeUninit;
@@ -78,7 +71,7 @@ impl Timer {
         let reschedule_ticks = TxTicks::from(reschedule_ticks).into();
         let auto_activate = if auto_activate { 1 } else { 0 };
 
-        unsafe {
+        let res = unsafe {
             _tx_timer_create(
                 timer,
                 name.as_ptr() as *mut i8,
@@ -87,8 +80,12 @@ impl Timer {
                 initial_ticks,
                 reschedule_ticks,
                 auto_activate,
-            );
+            )
         };
+        // Manual error handling because the macro caused miscompilation
+        if res != TX_SUCCESS {
+            return Err(TxError::from_u32(res).unwrap());
+        }
         Ok(())
     }
 }
