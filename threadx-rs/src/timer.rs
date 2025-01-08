@@ -42,13 +42,7 @@ unsafe extern "C" fn timer_callback_trampoline(arg: ULONG)
 {
     let argc = arg as *mut alloc::boxed::Box<dyn Fn()>;
     
-    let closure: alloc::boxed::Box<dyn Fn()> = alloc::boxed::Box::from_raw(argc);
-    let leaked_closure = alloc::boxed::Box::leak(closure);
-    println!("Reconstructed the box at {}", arg);
-
-    leaked_closure();
-
-
+    (*argc)();
 }
 
 pub struct Timer(MaybeUninit<TX_TIMER>);
@@ -70,7 +64,7 @@ impl Timer {
         let timer = self.0.as_mut_ptr();
 
         //convert to a ULONG
-        
+        // Clarify?
         let expiration_function_ptr =  alloc::boxed::Box::into_raw(alloc::boxed::Box::new(expiration_function)) as *mut c_void;
         let expiration_function_arg = expiration_function_ptr as ULONG;
 
