@@ -77,7 +77,7 @@ fn start_clock() -> impl Clock {
         }
     }
 
-    fn clock_tick(_param: ULONG) {
+    fn clock_tick() {
         TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
     }
 

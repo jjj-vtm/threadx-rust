@@ -27,8 +27,6 @@ pub struct Running;
 pub struct Suspended;
 pub struct Stopped;
 
-type TxThreadEntry = unsafe extern "C" fn(ULONG);
-
 impl Thread {
     pub const fn new() -> Thread {
         Thread {
@@ -45,15 +43,8 @@ where
     closure();
 }
 
-fn get_trampoline<F>(closure: &F) -> TxThreadEntry
-where
-    F: Fn(),
-{
-    thread_trampoline::<F>
-}
-
 impl Thread {
-    pub fn initialize_with_autostart<F: Fn()>(
+    pub fn initialize_with_autostart<F: Fn()  + 'static>(
         &'static mut self,
         name: &str,
         mut entry_function: F,
@@ -66,7 +57,7 @@ impl Thread {
         let entry_function_ptr = &mut entry_function as *mut _ as *mut c_void;
         //convert to a ULONG
         let entry_function_arg = entry_function_ptr as ULONG;
-        let trampoline = get_trampoline(&entry_function);
+       // let trampoline = get_trampoline(&entry_function);
 
         // Check that strlen < 31
         let mut local_name = [0u8; 32];
@@ -76,7 +67,7 @@ impl Thread {
             // TODO: Ensure that threadx api does not modify this
             self.tx_struct.as_mut_ptr(),
             local_name.as_mut_ptr() as *mut i8,
-            Some(trampoline),
+            Some(thread_trampoline::<F>),
             entry_function_arg,
             stack as *mut core::ffi::c_void,
             stack.len() as ULONG,
@@ -104,7 +95,6 @@ impl Thread {
         let entry_function_ptr = &mut entry_function as *mut _ as *mut c_void;
         //convert to a ULONG
         let entry_function_arg = entry_function_ptr as ULONG;
-        let trampoline = get_trampoline(&entry_function);
 
         // Check that strlen < 31
         let mut local_name = [0u8; 32];
@@ -114,7 +104,7 @@ impl Thread {
             // TODO: Ensure that threadx api does not modify this
             self.tx_struct.as_mut_ptr(),
             local_name.as_mut_ptr() as *mut i8,
-            Some(trampoline),
+            Some(thread_trampoline::<F>),
             entry_function_arg,
             stack as *mut core::ffi::c_void,
             stack.len() as ULONG,

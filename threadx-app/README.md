@@ -52,6 +52,13 @@ cargo run --bin hello --release
 The code assumes that you will be using an ST-Link debugger. 
 
 ## Debbugging
+
+Objdump:
+arm-none-eabi-objdump
+
+gdb:
+arm-none-eabi-gdb target/thumbv7em-none-eabihf/release/event_flag
+
 Hardfault:
 Set:
 (gdb) set mem inaccessible-by-default off

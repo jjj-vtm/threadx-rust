@@ -36,6 +36,7 @@ pub struct EventFlagsGroup{
     flag_group: MaybeUninit<TX_EVENT_FLAGS_GROUP>,
 }
 #[derive(Copy, Clone)]
+
 pub struct EventFlagsGroupHandle {
     pub flag_group_ptr: *mut TX_EVENT_FLAGS_GROUP,
 }
@@ -56,7 +57,6 @@ impl EventFlagsGroup {
     pub fn initialize(&'static mut self, name: &CStr) -> Result<EventFlagsGroupHandle, TxError> {
         let group_ptr = self.flag_group.as_mut_ptr();
 
-        defmt::println!("EventFlagsGroup::initialize: ptr is: {}", group_ptr);
         tx_checked_call!(_tx_event_flags_create(group_ptr, name.as_ptr() as *mut i8))?;
         Ok(EventFlagsGroupHandle {
             flag_group_ptr: group_ptr,
@@ -65,15 +65,14 @@ impl EventFlagsGroup {
 }
 
 impl EventFlagsGroupHandle {
-    pub fn publish(& self, flags_to_set: u32) -> Result<(), TxError> {
+    pub fn publish(&self, flags_to_set: u32) -> Result<(), TxError> {
         defmt::println!("Publish: ptr is: {}", self.flag_group_ptr);
 
-        Ok(())
-        //tx_checked_call!(_tx_event_flags_set(self.flag_group_ptr, flags_to_set, 0))
+        tx_checked_call!(_tx_event_flags_set(self.flag_group_ptr, flags_to_set, 0))
     }
 
     pub fn get(
-        & self,
+        &self,
         requested_flags: u32,
         get_option: GetOption,
         wait_option: WaitOption,
