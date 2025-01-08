@@ -83,9 +83,9 @@ fn main() -> ! {
                 defmt::println!("Paniccccc at {}", &evt_handle as *const _);
                 defmt::println!("Value of: {}", k);
                 clock_tick();
-                evt_handle.publish(1).unwrap();
+              //  evt_handle.publish(1).unwrap();
             });
-            
+
             timer
                 .initialize_with_closure(
                     CStr::from_bytes_until_nul(b"timer\0").unwrap(),
@@ -131,7 +131,6 @@ fn main() -> ! {
                 let arg: u32 = 1;
 
                 loop {
-                    defmt::println!("Thread2::initialize: ptr is: {}", evt_handle.flag_group_ptr);
 
                     let event = evt_handle
                         .get(
