@@ -21,15 +21,6 @@ use threadx_rs::tx_str;
 
 extern crate alloc;
 
-
-static TICKS: AtomicU32 = AtomicU32::new(0);
-#[no_mangle]
-#[inline(never)]
-fn clock_tick() {
-    TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-}
-
-
 #[cortex_m_rt::entry]
 fn main() -> ! {
     defmt::println!("Hello, world!");
@@ -77,31 +68,25 @@ fn main() -> ! {
             static TIMER: StaticCell<Timer> = StaticCell::new();
             let timer = TIMER.init(Timer::new());
 
-            let k = "Hello";
-
             let timer_fn = Box::new( move || {
-                defmt::println!("Paniccccc at {}", &evt_handle as *const _);
-                defmt::println!("Value of: {}", k);
-                clock_tick();
-              //  evt_handle.publish(1).unwrap();
+                println!("Someone called timer_fn");
+                evt_handle.publish(1).unwrap();
             });
 
             timer
                 .initialize_with_closure(
                     CStr::from_bytes_until_nul(b"timer\0").unwrap(),
                     timer_fn,
-                    42,
-                    core::time::Duration::from_secs(1), // initial timeout is 5 seconds
-                    core::time::Duration::from_secs(5), // periodic timeout is 1 second
+                    core::time::Duration::from_secs(5), // initial timeout is 5 seconds
+                    core::time::Duration::from_secs(1), // periodic timeout is 1 second
                     true,                               // start the timer immediately
                 )
                 .expect("Timer Init failed");
+            
             static mut thread: Thread = Thread::new();
-            let thread_func = move || {
+            
+            let thread_func = Box::new(move || {
                 let mut arg: u32 = 0;
-
-                defmt::println!("Thread1::initialize: ptr is: {}", evt_handle.flag_group_ptr);
-                defmt::println!("Evt Handler at {}", &evt_handle as *const _);
 
                 println!("Thread:{}", arg);
                 loop {
@@ -112,23 +97,21 @@ fn main() -> ! {
                             WaitOption::WaitForever,
                         )
                         .expect("Thread1 failed");
-                    debug!("Thread1: Got Event 1 : {}", event);
+                    println!("Thread1: Got Event 1 : {}", event);
 
-                    //sleep(core::time::Duration::from_millis(100)).unwrap();
+                    threadx_rs::thread::sleep(core::time::Duration::from_millis(100)).unwrap();
                 }
-            };
-
-            defmt::println!("thread Closure at {}", &thread_func as *const _);
-
+            });
 
             let th_handle = unsafe {
                 thread
-                    .initialize_with_autostart("thread1", thread_func, task1_mem.consume(), 1, 1, 0)
+                    .initialize_with_autostart_box("thread1", thread_func, task1_mem.consume(), 1, 1, 0)
                     .unwrap()
             };
-
+            /* 
             let thread2_fn = move || {
                 let arg: u32 = 1;
+                println!("Thread:{}", arg);
 
                 loop {
 
@@ -139,9 +122,10 @@ fn main() -> ! {
                             WaitOption::WaitForever,
                         )
                         .expect("Thread2 failed");
-                    debug!("Thread2: Got Event 1 : {}", event);
+                    println!("Thread2: Got Event 1 : {}", event);
+                    threadx_rs::thread::sleep(core::time::Duration::from_millis(100)).unwrap();
+
                 }
-                //sleep(core::time::Duration::from_millis(100)).unwrap();
             };
             static mut thread2: Thread = Thread::new();
 
@@ -152,8 +136,8 @@ fn main() -> ! {
             };
 
             let thread3_fn = move || {
-                let arg: u32 = 1;
-                defmt::println!("Thread3::initialize: ptr is: {}", evt_handle.flag_group_ptr);
+                let arg: u32 = 2;
+                println!("Thread:{}", arg);
 
                 loop {
                     let event = evt_handle
@@ -163,7 +147,9 @@ fn main() -> ! {
                             WaitOption::WaitForever,
                         )
                         .expect("Thread3 failed");
-                    debug!("Thread3: Got Event 1 : {}", event);
+                    threadx_rs::thread::sleep(core::time::Duration::from_millis(100)).unwrap();
+
+                    println!("Thread3: Got Event 1 : {}", event);
                 }
             };
 
@@ -173,7 +159,7 @@ fn main() -> ! {
                 thread3
                     .initialize_with_autostart("thread2", thread3_fn, task3_mem.consume(), 1, 1, 0)
                     .unwrap()
-            };
+            };*/
 
             defmt::println!("Done with app init.");
         },

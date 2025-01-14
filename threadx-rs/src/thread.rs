@@ -13,6 +13,8 @@ use super::error::TxError;
 use defmt::error;
 use num_traits::FromPrimitive;
 
+extern crate alloc;
+
 pub struct Thread {
     tx_struct: MaybeUninit<TX_THREAD>,
 }
@@ -43,7 +45,51 @@ where
     closure();
 }
 
+unsafe extern "C" fn thread_box_callback_trampoline(arg: ULONG) {
+    let argc: *mut alloc::boxed::Box<dyn Fn()> = core::ptr::with_exposed_provenance_mut(arg as usize);
+    (*argc)();
+}
+
 impl Thread {
+
+    pub fn initialize_with_autostart_box(
+        &'static mut self,
+        name: &str,
+        mut entry_function: alloc::boxed::Box<dyn Fn()>,
+        stack: *mut [u8],
+        priority: u32,
+        preempt_threshold: u32,
+        time_slice: u32,
+    ) -> Result<ThreadHandle<Running>, TxError> {
+        let expiration_function_ptr =
+            alloc::boxed::Box::into_raw(alloc::boxed::Box::new(entry_function));
+
+        //convert to a ULONG
+        let entry_function_addr = expiration_function_ptr.expose_provenance() as ULONG;
+
+        // Check that strlen < 31
+        let mut local_name = [0u8; 32];
+        local_name[..name.len()].copy_from_slice(name.as_bytes());
+
+        tx_checked_call!(_tx_thread_create(
+            // TODO: Ensure that threadx api does not modify this
+            self.tx_struct.as_mut_ptr(),
+            local_name.as_mut_ptr() as *mut i8,
+            Some(thread_box_callback_trampoline),
+            entry_function_addr,
+            stack as *mut core::ffi::c_void,
+            stack.len() as ULONG,
+            priority as ULONG,
+            preempt_threshold as ULONG,
+            time_slice as ULONG,
+            1
+        ))
+        .map(|_| ThreadHandle {
+            tx_ptr: self.tx_struct.as_mut_ptr(),
+            state: PhantomData::<Running>,
+        })
+    }
+
     pub fn initialize_with_autostart<F: Fn()  + 'static>(
         &'static mut self,
         name: &str,

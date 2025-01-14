@@ -20,11 +20,8 @@ VOID        _tx_time_set(ULONG new_time);
 use crate::time::TxTicks;
 use core::ffi::c_void;
 use core::ffi::CStr;
-use core::mem;
-use core::mem::transmute;
 
 use super::error::TxError;
-use defmt::println;
 use num_traits::FromPrimitive;
 use threadx_sys::_tx_timer_create;
 use threadx_sys::TX_SUCCESS;
@@ -35,13 +32,9 @@ use threadx_sys::TX_TIMER;
 
 extern crate alloc;
 
-type TimerCallbackType = unsafe extern "C" fn(ULONG);
-
-
-unsafe extern "C" fn timer_callback_trampoline(arg: ULONG)
-{
-    let argc = arg as *mut alloc::boxed::Box<dyn Fn()>;
-    
+// arg will point to the wide pointer of a dyn Fn()
+unsafe extern "C" fn timer_callback_trampoline(arg: ULONG) {
+    let argc: *mut alloc::boxed::Box<dyn Fn()> = core::ptr::with_exposed_provenance_mut(arg as usize);
     (*argc)();
 }
 
@@ -56,18 +49,19 @@ impl Timer {
         &'static mut self,
         name: &CStr,
         expiration_function: alloc::boxed::Box<dyn Fn()>,
-        _expiration_input: ULONG,
         initial_ticks: core::time::Duration,
         reschedule_ticks: core::time::Duration,
         auto_activate: bool,
     ) -> Result<(), TxError> {
         let timer = self.0.as_mut_ptr();
 
-        //convert to a ULONG
-        // Clarify?
-        let expiration_function_ptr =  alloc::boxed::Box::into_raw(alloc::boxed::Box::new(expiration_function)) as *mut c_void;
-        let expiration_function_arg = expiration_function_ptr as ULONG;
+        // Calling into_raw on Box<dyn Fn()> gets a *mut dyn Fn() which is a wide pointer (https://doc.rust-lang.org/nomicon/exotic-sizes.html) ie. cannot directly be interpreted as a ULONG.
+        // Therefore we box the pointer and call into_raw so expiration_function_ptr points to the wide pointer on the heap. This leaks two boxes ie. the closure and the pointer to the closure but those have to be valid for the whole time.
+        let expiration_function_ptr =
+            alloc::boxed::Box::into_raw(alloc::boxed::Box::new(expiration_function));
 
+        //convert to a ULONG
+        let expiration_fn_addr = expiration_function_ptr.expose_provenance() as ULONG;
 
         let initial_ticks = TxTicks::from(initial_ticks).into();
         let reschedule_ticks = TxTicks::from(reschedule_ticks).into();
@@ -78,7 +72,7 @@ impl Timer {
                 timer,
                 name.as_ptr() as *mut i8,
                 Some(timer_callback_trampoline),
-                expiration_function_arg,
+                expiration_fn_addr,
                 initial_ticks,
                 reschedule_ticks,
                 auto_activate,

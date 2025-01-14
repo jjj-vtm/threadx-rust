@@ -77,6 +77,8 @@ impl EventFlagsGroupHandle {
         get_option: GetOption,
         wait_option: WaitOption,
     ) -> Result<u32, TxError> {
+        defmt::println!("Get from: {}", self.flag_group_ptr);
+
         let mut actual_flags = 0u32;
         tx_checked_call!(_tx_event_flags_get(
             self.flag_group_ptr,
