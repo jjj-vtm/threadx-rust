@@ -55,7 +55,7 @@ impl Thread {
     pub fn initialize_with_autostart_box(
         &'static mut self,
         name: &str,
-        mut entry_function: alloc::boxed::Box<dyn Fn()>,
+        entry_function: alloc::boxed::Box<dyn Fn()>,
         stack: *mut [u8],
         priority: u32,
         preempt_threshold: u32,

@@ -69,7 +69,6 @@ fn main() -> ! {
             let timer = TIMER.init(Timer::new());
 
             let timer_fn = Box::new( move || {
-                println!("Someone called timer_fn");
                 evt_handle.publish(1).unwrap();
             });
 
@@ -103,13 +102,13 @@ fn main() -> ! {
                 }
             });
 
-            let th_handle = unsafe {
+            let _ = unsafe {
                 thread
                     .initialize_with_autostart_box("thread1", thread_func, task1_mem.consume(), 1, 1, 0)
                     .unwrap()
             };
-            /* 
-            let thread2_fn = move || {
+            
+            let thread2_fn = Box::new(move || {
                 let arg: u32 = 1;
                 println!("Thread:{}", arg);
 
@@ -126,16 +125,16 @@ fn main() -> ! {
                     threadx_rs::thread::sleep(core::time::Duration::from_millis(100)).unwrap();
 
                 }
-            };
+            });
             static mut thread2: Thread = Thread::new();
 
             let th2_handle = unsafe {
                 thread2
-                    .initialize_with_autostart("thread1", thread2_fn, task2_mem.consume(), 1, 1, 0)
+                    .initialize_with_autostart_box("thread1", thread2_fn, task2_mem.consume(), 1, 1, 0)
                     .unwrap()
             };
 
-            let thread3_fn = move || {
+            let thread3_fn = Box::new(move || {
                 let arg: u32 = 2;
                 println!("Thread:{}", arg);
 
@@ -151,15 +150,15 @@ fn main() -> ! {
 
                     println!("Thread3: Got Event 1 : {}", event);
                 }
-            };
+            });
 
             static mut thread3: Thread = Thread::new();
 
             let th3_handle = unsafe {
                 thread3
-                    .initialize_with_autostart("thread2", thread3_fn, task3_mem.consume(), 1, 1, 0)
+                    .initialize_with_autostart_box("thread2", thread3_fn, task3_mem.consume(), 1, 1, 0)
                     .unwrap()
-            };*/
+            };
 
             defmt::println!("Done with app init.");
         },

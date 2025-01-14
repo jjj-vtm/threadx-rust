@@ -85,4 +85,38 @@ impl Timer {
 
         Ok(())
     }
+
+    pub fn initialize_with_fn(
+        &'static mut self,
+        name: &CStr,
+        expiration_function: Option<unsafe extern "C" fn(ULONG)>,
+        expiration_arg: u32,
+        initial_ticks: core::time::Duration,
+        reschedule_ticks: core::time::Duration,
+        auto_activate: bool,
+    ) -> Result<(), TxError> {
+        let timer = self.0.as_mut_ptr();
+
+        let initial_ticks = TxTicks::from(initial_ticks).into();
+        let reschedule_ticks = TxTicks::from(reschedule_ticks).into();
+        let auto_activate = if auto_activate { 1 } else { 0 };
+
+        let res = unsafe {
+            _tx_timer_create(
+                timer,
+                name.as_ptr() as *mut i8,
+                expiration_function,
+                expiration_arg,
+                initial_ticks,
+                reschedule_ticks,
+                auto_activate,
+            )
+        };
+        // Manual error handling because the macro caused miscompilation
+        if res != TX_SUCCESS {
+            return Err(TxError::from_u32(res).unwrap());
+        }
+
+        Ok(())
+    }
 }

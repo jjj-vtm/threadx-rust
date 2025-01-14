@@ -17,7 +17,7 @@ use netx_sys::ULONG;
 use static_cell::StaticCell;
 use threadx_app::network::network::ThreadxTcpWifiNetwork;
 
-use threadx_rs::{thread, tx_str};
+use threadx_rs::thread;
 
 use threadx_rs::thread::Thread;
 use threadx_rs::timer::Timer;
@@ -77,7 +77,7 @@ fn start_clock() -> impl Clock {
         }
     }
 
-    fn clock_tick() {
+    extern fn clock_tick(arg: ULONG) {
         TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
     }
 
@@ -88,9 +88,9 @@ fn start_clock() -> impl Clock {
 
     let clock_name = CStr::from_bytes_until_nul(b"clock_timer_mqtt\0").unwrap();
     let _ = clock_timer
-        .initialize_with_closure(
+        .initialize_with_fn(
             clock_name,
-            clock_tick,
+            Some(clock_tick),
             0,
             Duration::from_secs(1),
             Duration::from_secs(1),
