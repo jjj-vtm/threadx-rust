@@ -51,6 +51,7 @@ impl BytePool {
             name.as_ptr(),
             pool_memory.as_mut_ptr()
         );
+        
         tx_checked_call!(_tx_byte_pool_create(
             pool_ptr,
             name.as_ptr() as *mut i8,

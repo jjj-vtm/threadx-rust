@@ -41,11 +41,15 @@ fn main() -> ! {
                 mem_start.as_ptr(),
                 mem_start.len()
             );
-            static mut BP: BytePool = BytePool::new();
+
+            static BP: StaticCell<BytePool> = StaticCell::new();
+            let bp = BP.init(BytePool::new());
 
             let (bp_mem, next) = mem_start.split_at_mut(1024);
 
-            let bp = unsafe { BP.initialize(tx_str!("pool1"), bp_mem).unwrap() };
+            let bp = bp
+                .initialize(CStr::from_bytes_until_nul(b"pool1\0").unwrap(), bp_mem)
+                .unwrap();
 
             //allocate memory for the two tasks.
             let task1_mem = bp.allocate(256, true).unwrap();
@@ -84,38 +88,25 @@ fn main() -> ! {
                 )
                 .expect("Timer Init failed");
 
-            static mut thread: Thread = Thread::new();
+            static THREAD1: StaticCell<Thread> = StaticCell::new();
+            let thread1 = THREAD1.init(Thread::new());
 
-            let thread_func = Box::new(move || {
-                let mut arg: u32 = 0;
+            let thread_func = Box::new(move || loop {
+                let event = evt_handle
+                    .get(
+                        1,
+                        threadx_rs::event_flags::GetOption::WaitAllAndClear,
+                        WaitOption::WaitForever,
+                    )
+                    .expect("Thread1 failed");
+                println!("Thread1: Got Event 1 : {}", event);
 
-                println!("Thread:{}", arg);
-                loop {
-                    let event = evt_handle
-                        .get(
-                            1,
-                            threadx_rs::event_flags::GetOption::WaitAllAndClear,
-                            WaitOption::WaitForever,
-                        )
-                        .expect("Thread1 failed");
-                    println!("Thread1: Got Event 1 : {}", event);
-
-                    threadx_rs::thread::sleep(core::time::Duration::from_millis(100)).unwrap();
-                }
+                threadx_rs::thread::sleep(core::time::Duration::from_millis(100)).unwrap();
             });
 
-            let _ = unsafe {
-                thread
-                    .initialize_with_autostart_box(
-                        "thread1",
-                        thread_func,
-                        task1_mem.consume(),
-                        1,
-                        1,
-                        0,
-                    )
-                    .unwrap()
-            };
+            let _ = thread1
+                .initialize_with_autostart_box("thread1", thread_func, task1_mem.consume(), 1, 1, 0)
+                .unwrap();
 
             let thread2_fn = Box::new(move || {
                 let arg: u32 = 1;
@@ -133,20 +124,13 @@ fn main() -> ! {
                     threadx_rs::thread::sleep(core::time::Duration::from_millis(100)).unwrap();
                 }
             });
-            static mut thread2: Thread = Thread::new();
 
-            let th2_handle = unsafe {
-                thread2
-                    .initialize_with_autostart_box(
-                        "thread1",
-                        thread2_fn,
-                        task2_mem.consume(),
-                        1,
-                        1,
-                        0,
-                    )
-                    .unwrap()
-            };
+            static THREAD2: StaticCell<Thread> = StaticCell::new();
+            let thread2 = THREAD2.init(Thread::new());
+
+            let _ = thread2
+                .initialize_with_autostart_box("thread2", thread2_fn, task2_mem.consume(), 1, 1, 0)
+                .unwrap();
 
             let thread3_fn = Box::new(move || {
                 let arg: u32 = 2;
@@ -166,20 +150,12 @@ fn main() -> ! {
                 }
             });
 
-            static mut thread3: Thread = Thread::new();
+            static THREAD3: StaticCell<Thread> = StaticCell::new();
+            let thread3 = THREAD3.init(Thread::new());
 
-            let th3_handle = unsafe {
-                thread3
-                    .initialize_with_autostart_box(
-                        "thread2",
-                        thread3_fn,
-                        task3_mem.consume(),
-                        1,
-                        1,
-                        0,
-                    )
-                    .unwrap()
-            };
+            let _ = thread3
+                .initialize_with_autostart_box("thread3", thread3_fn, task3_mem.consume(), 1, 1, 0)
+                .unwrap();
 
             defmt::println!("Done with app init.");
         },
