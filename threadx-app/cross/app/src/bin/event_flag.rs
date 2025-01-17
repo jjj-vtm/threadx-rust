@@ -22,11 +22,17 @@ extern crate alloc;
 static GLOBAL: ThreadXAllocator = ThreadXAllocator::new();
 
 static BP: StaticCell<BytePool> = StaticCell::new();
+
 static EVENT_GROUP: StaticCell<EventFlagsGroup> = StaticCell::new();
+
 static TIMER: StaticCell<Timer> = StaticCell::new();
+
 static THREAD1: StaticCell<Thread> = StaticCell::new();
 static THREAD2: StaticCell<Thread> = StaticCell::new();
 static THREAD3: StaticCell<Thread> = StaticCell::new();
+
+static BP_MEM: StaticCell<[u8; 1024]> = StaticCell::new();
+static HEAP: StaticCell<[u8; 1024]> = StaticCell::new();
 
 
 #[cortex_m_rt::entry]
@@ -35,20 +41,18 @@ fn main() -> ! {
         // low level initialization
         |ticks_per_second| {
             BoardMxAz3166::low_level_init(ticks_per_second).unwrap();
-            static mut HEAP: [u8; 4096 * 3] = [0u8; 4096 * 3];
-            unsafe { HEAP.as_mut_slice() }
         },
         // Start of Application definition
         |mem_start| {
             defmt::println!(
-                "Define application. Memory starts at: {} with length:{}",
-                mem_start.as_ptr(),
-                mem_start.len()
+                "Define application. Memory starts at: {} ",
+                mem_start
             );
 
             let bp = BP.init(BytePool::new());
-
-            let (bp_mem, next) = mem_start.split_at_mut(1024);
+            
+            // Inefficient, creates array on the stack first.
+            let bp_mem= BP_MEM.init([0u8; 1024]);
 
             let bp = bp
                 .initialize(CStr::from_bytes_until_nul(b"pool1\0").unwrap(), bp_mem)
@@ -59,9 +63,8 @@ fn main() -> ! {
             let task2_mem = bp.allocate(256, true).unwrap();
             let task3_mem = bp.allocate(256, true).unwrap();
 
-            let (global_alloc_mem, _next) = next.split_at_mut(1024);
-
-            GLOBAL.initialize(global_alloc_mem).unwrap();
+            let heap = HEAP.init([0u8; 1024]);
+            GLOBAL.initialize(heap).unwrap();
 
             // create events flag group
             let event_group = EVENT_GROUP.init(EventFlagsGroup::new());

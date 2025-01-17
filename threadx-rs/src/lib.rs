@@ -1,5 +1,6 @@
 #![no_std]
 use core::ffi::c_void;
+use core::ptr;
 
 use threadx_sys::_tx_initialize_kernel_enter;
 
@@ -24,7 +25,7 @@ pub use threadx_sys::_tx_timer_interrupt as tx_timer_interrupt;
 /// Note that this is a function and not a closure. This means that the callback cannot capture
 /// any variables. The input to this callback is the number of ticks per second that is
 /// expected by the build configuration of threadx
-pub type LowLevelInitCb = fn(ticks_per_second: u32) -> &'static mut [u8];
+pub type LowLevelInitCb = fn(ticks_per_second: u32);
 /// This callback is called by threadx for the definition of the Application. All application
 /// resources are created in this callback. The input to this callback is the memory that can
 /// be used as heap memory.
@@ -36,7 +37,7 @@ pub type LowLevelInitCb = fn(ticks_per_second: u32) -> &'static mut [u8];
 /// It is conventional in Threadx to create all your applications resources here and then start
 /// the threads that are part of your application.
 
-pub type AppDefineCb = fn(&'static mut [u8]);
+pub type AppDefineCb = fn(*mut u8);
 
 pub struct Builder {
     low_level_init_cb: LowLevelInitCb,
@@ -45,7 +46,6 @@ pub struct Builder {
 
 static mut INIT_CB: Option<LowLevelInitCb> = None;
 static mut DEFINE_CB: Option<AppDefineCb> = None;
-static mut HEAP: Option<&'static mut [u8]> = None;
 
 impl Builder {
     pub fn new(low_level_init_cb: LowLevelInitCb, app_define_cb: AppDefineCb) -> Self {
@@ -78,6 +78,9 @@ impl Builder {
 // This variable is defined by threadx and is used to store a pointer to the unused memory
 extern "C" {
     static mut _tx_initialize_unused_memory: *mut c_void;
+    // Defined in the cortex m crate in the linker script.
+    static __sheap: *const c_void;
+
 }
 
 /// This function is called by threadx for low level initialization
@@ -88,11 +91,8 @@ unsafe extern "C" fn _tx_initialize_low_level() {
     // is available for the application to use.
     // Safety: This callback is called only after we initialize the INIT_CB in the initialize function
     // and it can never be `None`
-    let mem = INIT_CB.unwrap()(threadx_sys::TX_TIMER_TICKS_PER_SECOND);
-    let heap_start = mem.as_mut_ptr();
-    // we need to store it locally to keep track of the size.
-    HEAP = Some(mem);
-    _tx_initialize_unused_memory = heap_start as *mut c_void;
+    INIT_CB.unwrap()(threadx_sys::TX_TIMER_TICKS_PER_SECOND);
+    _tx_initialize_unused_memory = (&raw const __sheap).add(1) as *mut c_void;
 }
 
 #[no_mangle]
@@ -101,10 +101,7 @@ unsafe extern "C" fn tx_application_define(mem_start: *mut c_void) {
     // Safety: This callback is called only after we initialize the DEFINE_CB in the initialize function
     // and it can never be `None`
     // The kernel is started after this callback returns.
-    DEFINE_CB.unwrap()(core::slice::from_raw_parts_mut(
-        mem_start as *mut u8,
-        HEAP.as_ref().unwrap().len(),
-    ));
+    DEFINE_CB.unwrap()(mem_start as *mut u8);
 }
 
 #[macro_export]
