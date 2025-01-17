@@ -2,31 +2,35 @@
 #![no_std]
 
 use core::ffi::CStr;
-use core::sync::atomic::{AtomicBool, AtomicU32};
 
 use alloc::boxed::Box;
 use board::{BoardMxAz3166, LowLevelInit};
 
-use defmt::{debug, println};
+use defmt::println;
 use static_cell::StaticCell;
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::EventFlagsGroup;
 use threadx_rs::pool::BytePool;
 use threadx_rs::timer::Timer;
-use threadx_rs::{tx_checked_call, WaitOption};
+use threadx_rs::WaitOption;
 
 use threadx_rs::thread::Thread;
-use threadx_rs::tx_str;
 
 extern crate alloc;
 
 #[global_allocator]
 static GLOBAL: ThreadXAllocator = ThreadXAllocator::new();
 
+static BP: StaticCell<BytePool> = StaticCell::new();
+static EVENT_GROUP: StaticCell<EventFlagsGroup> = StaticCell::new();
+static TIMER: StaticCell<Timer> = StaticCell::new();
+static THREAD1: StaticCell<Thread> = StaticCell::new();
+static THREAD2: StaticCell<Thread> = StaticCell::new();
+static THREAD3: StaticCell<Thread> = StaticCell::new();
+
+
 #[cortex_m_rt::entry]
 fn main() -> ! {
-    defmt::println!("Hello, world!");
-
     let tx = threadx_rs::Builder::new(
         // low level initialization
         |ticks_per_second| {
@@ -42,7 +46,6 @@ fn main() -> ! {
                 mem_start.len()
             );
 
-            static BP: StaticCell<BytePool> = StaticCell::new();
             let bp = BP.init(BytePool::new());
 
             let (bp_mem, next) = mem_start.split_at_mut(1024);
@@ -56,14 +59,11 @@ fn main() -> ! {
             let task2_mem = bp.allocate(256, true).unwrap();
             let task3_mem = bp.allocate(256, true).unwrap();
 
-            let (global_alloc_mem, next) = next.split_at_mut(1024);
-            //let  heap_bytepool : BytePoolHandle = unsafe{BP1.initialize(tx_str!("pool2"), bp1_mem).unwrap()};
+            let (global_alloc_mem, _next) = next.split_at_mut(1024);
 
-            // Only after this call the global allocator is working, using Heap alloocations before should panic.
             GLOBAL.initialize(global_alloc_mem).unwrap();
 
             // create events flag group
-            static EVENT_GROUP: StaticCell<EventFlagsGroup> = StaticCell::new();
             let event_group = EVENT_GROUP.init(EventFlagsGroup::new());
 
             let evt_handle = event_group
@@ -71,7 +71,6 @@ fn main() -> ! {
                 .unwrap();
 
             // Create timer
-            static TIMER: StaticCell<Timer> = StaticCell::new();
             let timer = TIMER.init(Timer::new());
 
             let timer_fn = Box::new(move || {
@@ -88,7 +87,6 @@ fn main() -> ! {
                 )
                 .expect("Timer Init failed");
 
-            static THREAD1: StaticCell<Thread> = StaticCell::new();
             let thread1 = THREAD1.init(Thread::new());
 
             let thread_func = Box::new(move || loop {
@@ -125,7 +123,6 @@ fn main() -> ! {
                 }
             });
 
-            static THREAD2: StaticCell<Thread> = StaticCell::new();
             let thread2 = THREAD2.init(Thread::new());
 
             let _ = thread2
@@ -150,7 +147,6 @@ fn main() -> ! {
                 }
             });
 
-            static THREAD3: StaticCell<Thread> = StaticCell::new();
             let thread3 = THREAD3.init(Thread::new());
 
             let _ = thread3

@@ -17,12 +17,16 @@ use netx_sys::ULONG;
 use static_cell::StaticCell;
 use threadx_app::network::network::ThreadxTcpWifiNetwork;
 
+use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::thread;
 
 use threadx_rs::thread::Thread;
 use threadx_rs::timer::Timer;
 
 pub type UINT = ::core::ffi::c_uint;
+
+#[global_allocator]
+static GLOBAL: ThreadXAllocator = ThreadXAllocator::new();
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -40,6 +44,8 @@ fn main() -> ! {
                 user_heap_mem_start.as_ptr(),
                 user_heap_mem_start.len()
             );
+
+            GLOBAL.initialize(user_heap_mem_start).unwrap();
 
             // Static Cell since we need an allocated but uninitialized block of memory
             static WIFI_THREAD_STACK: StaticCell<[u8; 8192]> = StaticCell::new();

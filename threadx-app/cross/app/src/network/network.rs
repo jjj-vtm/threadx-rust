@@ -135,7 +135,8 @@ impl ThreadxTcpWifiNetwork {
             NETX_RX_POOL_SIZE as u32
         ))?;
 
-        nx_checked_call!(wwd_buffer_init(POOL.as_mut_ptr() as *mut core::ffi::c_void))?;
+        let pool_ptr = &raw mut POOL;
+        nx_checked_call!(wwd_buffer_init(pool_ptr as *mut core::ffi::c_void))?;
 
         nx_checked_call!(wwd_management_wifi_on(
             wiced_country_code_t_WICED_COUNTRY_WORLD_WIDE_XX
