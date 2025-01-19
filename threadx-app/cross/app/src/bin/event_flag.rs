@@ -10,7 +10,7 @@ use defmt::println;
 use static_cell::StaticCell;
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::EventFlagsGroup;
-use threadx_rs::pool::BytePool;
+use threadx_rs::pool::{self, BytePool, BytePoolHandle};
 use threadx_rs::timer::Timer;
 use threadx_rs::WaitOption;
 
@@ -34,7 +34,6 @@ static THREAD3: StaticCell<Thread> = StaticCell::new();
 static BP_MEM: StaticCell<[u8; 1024]> = StaticCell::new();
 static HEAP: StaticCell<[u8; 1024]> = StaticCell::new();
 
-
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let tx = threadx_rs::Builder::new(
@@ -44,16 +43,13 @@ fn main() -> ! {
         },
         // Start of Application definition
         |mem_start| {
-            defmt::println!(
-                "Define application. Memory starts at: {} ",
-                mem_start
-            );
+            defmt::println!("Define application. Memory starts at: {} ", mem_start);
 
             let bp = BP.init(BytePool::new());
-            
-            // Inefficient, creates array on the stack first.
-            let bp_mem= BP_MEM.init([0u8; 1024]);
 
+            // Inefficient, creates array on the stack first.
+            let bp_mem = BP_MEM.init([0u8; 1024]);
+            //let mut bp_mem = [0u8; 1024];
             let bp = bp
                 .initialize(CStr::from_bytes_until_nul(b"pool1\0").unwrap(), bp_mem)
                 .unwrap();

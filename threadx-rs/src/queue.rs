@@ -41,7 +41,7 @@ impl <T>Queue<T> {
     pub fn initialize(
         &'static mut self,
         name: &CStr,
-        queue_memory: MemoryBlock,
+        mut queue_memory: MemoryBlock,
     ) -> Result<(QueueSender<T>,QueueReceiver<T>), TxError> {       
         let queue_ptr = self.0.as_mut_ptr();
         let queue_memory = queue_memory.consume();
