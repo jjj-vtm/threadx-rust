@@ -30,21 +30,14 @@ impl BytePool {
         BytePool(MaybeUninit::<TX_BYTE_POOL>::uninit())
     }
 
-    /// Initialize the byte pool. We need the backing memory to be static, at least when we want to create MemoryBlocks which require static
+    // From safe rust this cannot be called more than once for a given self since it is mutable borrowed for 'static
     pub fn initialize<'pool_memory>(
         &'static mut self,
         name: &CStr,
         pool_memory: &'pool_memory mut [u8],
     ) -> Result<BytePoolHandle<'pool_memory>, TxError> {
         let pool_ptr = self.0.as_mut_ptr();
-        if pool_ptr.is_null() {
-            panic!("Pool ptr is null");
-        }
-        unsafe {
-            if !(*pool_ptr).tx_byte_pool_start.is_null() {
-                panic!("Pool is already initialized");
-            }
-        }
+
         defmt::println!(
             "Pool ptr: {} name:{} memory:{}",
             pool_ptr,
@@ -94,7 +87,7 @@ impl<'a> BytePoolHandle<'a> {
     }
 
     pub fn allocate(
-        self: &BytePoolHandle<'a>,
+        &self,
         size: usize,
         wait: bool,
     ) -> Result<MemoryBlock<'a>, TxError> {
@@ -125,21 +118,14 @@ impl BlockPool {
         BlockPool(core::mem::MaybeUninit::uninit())
     }
 
-    pub fn initialize(
+    pub fn initialize<'pool_memory>(
         &'static mut self,
         name: &CStr,
         block_size: usize,
-        pool_memory: &mut [u8],
-    ) -> Result<BlockPoolHandle, TxError> {
+        pool_memory: &'pool_memory mut [u8],
+    ) -> Result<BlockPoolHandle<'pool_memory>, TxError> {
         let pool_ptr = self.0.as_mut_ptr();
-        if pool_ptr.is_null() {
-            panic!("Pool ptr is null");
-        }
-        unsafe {
-            if !(*pool_ptr).tx_block_pool_start.is_null() {
-                panic!("Pool is already initialized");
-            }
-        }
+
         tx_checked_call!(_tx_block_pool_create(
             pool_ptr,
             name.as_ptr() as *mut i8,
@@ -147,14 +133,15 @@ impl BlockPool {
             pool_memory.as_mut_ptr() as *mut core::ffi::c_void,
             pool_memory.len() as ULONG
         ))
-        .map(|_| BlockPoolHandle(pool_ptr))
+        .map(|_| BlockPoolHandle(pool_ptr, PhantomData))
     }
 }
 
-pub struct BlockPoolHandle(*mut TX_BLOCK_POOL);
+pub struct BlockPoolHandle<'a> (*mut TX_BLOCK_POOL, PhantomData<&'a [u8]>,
+);
 
-impl BlockPoolHandle {
-    pub fn allocate(&mut self, wait: bool) -> Result<&'static mut [u8], TxError> {
+impl<'memory> BlockPoolHandle<'memory> {
+    pub fn allocate(&mut self, wait: bool) -> Result<&'memory mut [u8], TxError> {
         let mut ptr: *mut c_void = core::ptr::null_mut() as *mut c_void;
         tx_checked_call!(_tx_block_allocate(
             self.0,
@@ -169,7 +156,7 @@ impl BlockPoolHandle {
         })
     }
 
-    pub fn release(&mut self, mem: &'static mut [u8]) -> Result<(), TxError> {
+    pub fn release(&mut self, mem: &mut [u8]) -> Result<(), TxError> {
         tx_checked_call!(_tx_block_release(mem.as_mut_ptr() as *mut c_void))
     }
 
