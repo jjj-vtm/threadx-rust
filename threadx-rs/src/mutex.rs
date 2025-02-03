@@ -1,7 +1,4 @@
-use core::borrow::Borrow;
-use core::borrow::BorrowMut;
 use core::cell::UnsafeCell;
-use core::f32::consts::E;
 use core::ffi::CStr;
 use core::mem::MaybeUninit;
 use core::ops::Deref;
@@ -24,27 +21,27 @@ UINT        _tx_mutex_put(TX_MUTEX *mutex_ptr);
 */
 use crate::tx_checked_call;
 
-use super::WaitOption;
 use super::error::TxError;
-use defmt::debug;
+use super::WaitOption;
 use defmt::error;
 use num_traits::FromPrimitive;
 use thiserror_no_std::Error;
-use threadx_sys::TX_MUTEX;
 use threadx_sys::_tx_mutex_create;
 use threadx_sys::_tx_mutex_delete;
 use threadx_sys::_tx_mutex_get;
 use threadx_sys::_tx_mutex_put;
+use threadx_sys::TX_MUTEX;
 
 pub struct Mutex<T> {
-    inner : UnsafeCell<T>,
-    mutex : UnsafeCell<MaybeUninit<TX_MUTEX>>,
+    inner: UnsafeCell<T>,
+    mutex: UnsafeCell<MaybeUninit<TX_MUTEX>>,
+    initialized: bool,
 }
-//unsafe impl<T: Send> Send for Mutex<T> {}
+/// Safety: Initialization is done via a &mut reference hence thread safe
 unsafe impl<T: Send> Sync for Mutex<T> {}
 
-pub struct MutexGuard<'a,T> {
-    mutex : &'a Mutex<T>,
+pub struct MutexGuard<'a, T> {
+    mutex: &'a Mutex<T>,
 }
 
 impl<T> Deref for MutexGuard<'_, T> {
@@ -64,7 +61,7 @@ impl<T> DerefMut for MutexGuard<'_, T> {
 impl<T> Drop for MutexGuard<'_, T> {
     fn drop(&mut self) {
         let mutex_ptr = self.mutex.mutex.get();
-        if let Some(mutex_ptr) = unsafe{mutex_ptr.as_mut()} {
+        if let Some(mutex_ptr) = unsafe { mutex_ptr.as_mut() } {
             if tx_checked_call!(_tx_mutex_put(mutex_ptr.as_mut_ptr())).is_err() {
                 error!("MutexGuard::drop failed to put mutex");
             }
@@ -74,90 +71,63 @@ impl<T> Drop for MutexGuard<'_, T> {
     }
 }
 
-#[derive(Error,Debug)]
+#[derive(Error, Debug)]
 pub enum MutexError {
     MutexError(TxError),
     PoisonError,
 }
 
-impl <T>Mutex<T> {
-    pub const fn new(inner: T) -> Self {
-        Self {
-            inner : UnsafeCell::new(inner),
-            mutex : UnsafeCell::new(MaybeUninit::<TX_MUTEX>::uninit()),
+impl<T> Mutex<T> {
+    pub const fn new(inner: T) -> Mutex<T> {
+        Mutex {
+            inner: UnsafeCell::new(inner),
+            mutex: UnsafeCell::new(MaybeUninit::<TX_MUTEX>::uninit()),
+            initialized: false,
         }
     }
-
-    pub fn initialize(&'static mut self, name: &CStr, inherit: bool) -> Result<(),TxError> {
-
-        
-        unsafe {
-            if !self.mutex.get_mut().as_ptr().as_ref().unwrap().tx_mutex_name.is_null() {
-                panic!("Mutex is already initialized");
-            }
+}
+impl<T> Mutex<T> {
+    pub fn initialize(&mut self, name: &CStr, inherit: bool) -> Result<(), TxError> {
+        if self.initialized {
+            // If mutex was already initialized we just return Ok
+            return Ok(());
         }
         let mutex_ptr = self.mutex.get_mut().as_mut_ptr();
-
-        tx_checked_call!(_tx_mutex_create(
+        let res = tx_checked_call!(_tx_mutex_create(
             mutex_ptr,
             name.as_ptr() as *mut i8,
             inherit as u32
-        ))
+        ));
+        if res.is_ok() {
+            self.initialized = true;
+        }
+        res
     }
+    pub fn lock(&self, wait_option: WaitOption) -> Result<MutexGuard<'_, T>, MutexError> {
+        if !self.initialized {
+            return Err(MutexError::PoisonError);
+        }
+        let mutex_ptr = self.mutex.get();
 
-    pub fn lock(&'static self, wait_option: WaitOption) -> Result<MutexGuard<T>,MutexError> {
-        let mut mutex_ptr = self.mutex.get();
-        
-        if let Some(mutex_ptr) = unsafe{mutex_ptr.as_mut()} {
+        if let Some(mutex_ptr) = unsafe { mutex_ptr.as_mut() } {
             let mutex_ptr = mutex_ptr.as_mut_ptr();
-            unsafe {
-                if (*mutex_ptr).tx_mutex_name.is_null() {
-                    return Err(MutexError::PoisonError);
-                }
-            }
-            let result = tx_checked_call!(_tx_mutex_get(mutex_ptr,wait_option as u32));
+            let result = tx_checked_call!(_tx_mutex_get(mutex_ptr, wait_option as u32));
             match result {
-                Ok(_) => Ok(MutexGuard{mutex:self}),
-                Err(e) => Err(MutexError::MutexError(e))
+                Ok(_) => Ok(MutexGuard { mutex: self }),
+                Err(e) => Err(MutexError::MutexError(e)),
             }
         } else {
             return Err(MutexError::PoisonError);
         }
     }
 }
-
-impl <T>Drop for Mutex<T> {
+impl<T> Drop for Mutex<T> {
     fn drop(&mut self) {
-        let mutex_ptr = self.mutex.get_mut().as_mut_ptr();
-        if mutex_ptr.is_null() {
-            panic!("Mutex ptr is null");
+        if !self.initialized {
+            // Nothing to drop, we rely on rusts recursive drop
+            return;
         }
+        let mutex_ptr = self.mutex.get_mut().as_mut_ptr();
         let _ = tx_checked_call!(_tx_mutex_delete(mutex_ptr));
     }
 }
-
-
-
-
-// unsafe impl Sync for MutexHandle {}
-// unsafe impl Send for MutexHandle  {}
-// pub struct MutexHandle(&mut TX_MUTEX);
-
-// impl MutexHandle {
-//     fn new(mutex_ptr: *mut TX_MUTEX) -> Self {
-//         assert!(!mutex_ptr.is_null(),"MutexHandle::new mutex_ptr is null");
-//         MutexHandle(mutex_ptr)
-//     }
-
-//     pub fn delete(self) -> Result<(),TxError> {
-//         tx_checked_call!(_tx_mutex_delete(self.0))
-//     }
-
-//     pub fn get(&self, wait_option: WaitOption) -> Result<(),TxError> {
-//         tx_checked_call!(_tx_mutex_get(self.0,wait_option as u32))
-//     }
-
-//     pub fn put(&self) -> Result<(),TxError> {
-//         tx_checked_call!(_tx_mutex_put(self.0))
-//     }
-// }

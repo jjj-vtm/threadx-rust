@@ -37,7 +37,6 @@ fn main() -> ! {
         |ticks_per_second| {
             BoardMxAz3166::low_level_init(ticks_per_second).unwrap();
             static mut HEAP: [u8; 4096*3] = [0u8; 4096*3];
-            unsafe { HEAP.as_mut_slice() }
         },
         // Start of Application definition
         |mem_start| {

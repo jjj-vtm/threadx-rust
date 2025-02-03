@@ -10,7 +10,8 @@ use defmt::println;
 use static_cell::StaticCell;
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::EventFlagsGroup;
-use threadx_rs::pool::{self, BytePool, BytePoolHandle};
+use threadx_rs::mutex::Mutex;
+use threadx_rs::pool::{self, BytePool};
 use threadx_rs::timer::Timer;
 use threadx_rs::WaitOption;
 
@@ -61,7 +62,9 @@ fn main() -> ! {
 
             let heap = HEAP.init([0u8; 1024]);
             GLOBAL.initialize(heap).unwrap();
+            let mut mutex = Mutex::new(2);
 
+            let m = mutex.initialize(CStr::from_bytes_until_nul(b"mutex").unwrap(), false);
             // create events flag group
             let event_group = EVENT_GROUP.init(EventFlagsGroup::new());
 

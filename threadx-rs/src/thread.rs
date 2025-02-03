@@ -19,9 +19,8 @@ pub struct Thread {
     tx_struct: MaybeUninit<TX_THREAD>,
 }
 
-pub struct ThreadHandle<STATE> {
+pub struct ThreadHandle {
     tx_ptr: *mut TX_THREAD,
-    state: PhantomData<STATE>,
 }
 
 pub struct UnInitialized;
@@ -60,7 +59,7 @@ impl Thread {
         priority: u32,
         preempt_threshold: u32,
         time_slice: u32,
-    ) -> Result<ThreadHandle<Running>, TxError> {
+    ) -> Result<ThreadHandle, TxError> {
         let expiration_function_ptr =
             alloc::boxed::Box::into_raw(alloc::boxed::Box::new(entry_function));
 
@@ -86,7 +85,6 @@ impl Thread {
         ))
         .map(|_| ThreadHandle {
             tx_ptr: self.tx_struct.as_mut_ptr(),
-            state: PhantomData::<Running>,
         })
     }
 
@@ -99,7 +97,7 @@ impl Thread {
         priority: u32,
         preempt_threshold: u32,
         time_slice: u32,
-    ) -> Result<ThreadHandle<Running>, TxError> {
+    ) -> Result<ThreadHandle, TxError> {
         //convert entry function into a pointer
         let entry_function_ptr = &mut entry_function as *mut _ as *mut c_void;
         //convert to a ULONG
@@ -125,7 +123,6 @@ impl Thread {
         ))
         .map(|_| ThreadHandle {
             tx_ptr: self.tx_struct.as_mut_ptr(),
-            state: PhantomData::<Running>,
         })
     }
 
@@ -137,7 +134,7 @@ impl Thread {
         priority: u32,
         preempt_threshold: u32,
         time_slice: u32,
-    ) -> Result<ThreadHandle<Suspended>, TxError> {
+    ) -> Result<ThreadHandle, TxError> {
         //convert entry function into a pointer
         let entry_function_ptr = &mut entry_function as *mut _ as *mut c_void;
         //convert to a ULONG
@@ -162,7 +159,6 @@ impl Thread {
         ))
         .map(|_| ThreadHandle {
             tx_ptr: self.tx_struct.as_mut_ptr(),
-            state: PhantomData::<Suspended>,
         })
     }
 
@@ -201,27 +197,19 @@ impl Thread {
     }
 }
 
-impl ThreadHandle<Suspended> {
-    pub fn start(&mut self) -> Result<(ThreadHandle<Running>), TxError> {
+impl ThreadHandle {
+    pub fn start(&mut self) -> Result<ThreadHandle, TxError> {
         tx_checked_call!(_tx_thread_resume(self.tx_ptr))?;
         Ok(ThreadHandle {
             tx_ptr: self.tx_ptr,
-            state: PhantomData::<Running>,
         })
     }
-}
-
-impl ThreadHandle<Running> {
-    pub fn suspend(mut self) -> Result<(ThreadHandle<Suspended>), TxError> {
+    pub fn suspend(&mut self) -> Result<ThreadHandle, TxError> {
         tx_checked_call!(_tx_thread_suspend(self.tx_ptr))?;
         Ok(ThreadHandle {
             tx_ptr: self.tx_ptr,
-            state: PhantomData::<Suspended>,
         })
     }
-}
-
-impl<STATE> ThreadHandle<STATE> {
     /// Deletes the thread. You need to pass ownership
     /// of the thread handle to this function.
     pub fn delete(self) -> Result<(), TxError> {

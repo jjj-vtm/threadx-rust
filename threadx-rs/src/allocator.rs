@@ -1,12 +1,10 @@
 use crate::error::TxError;
-use crate::{pool, tx_checked_call, tx_str};
-use core::cell::{Cell, RefCell, UnsafeCell};
+use crate::{tx_checked_call, tx_str};
 use core::sync::atomic::AtomicBool;
 use core::{
     alloc::{GlobalAlloc, Layout},
     ffi::{c_void, CStr},
     mem::MaybeUninit,
-    ptr::null_mut,
 };
 use defmt::{error, println};
 use num_traits::FromPrimitive;
@@ -29,8 +27,6 @@ pub struct ThreadXAllocator {
     pool_ptr: *mut TX_BYTE_POOL,
     initialized: AtomicBool,
 }
-
-static GLOBAL_ALLOCATOR_CREATED: AtomicBool = AtomicBool::new(false);
 
 unsafe impl Sync for ThreadXAllocator {}
 

@@ -17,42 +17,35 @@ UINT        _tx_queue_front_send(TX_QUEUE *queue_ptr, VOID *source_ptr, ULONG wa
 
 */
 
-use core::mem::size_of;
-use core::{mem::MaybeUninit, ffi::CStr, marker::PhantomData};
-use threadx_sys::{TX_QUEUE, _tx_queue_create, ULONG, _tx_queue_send, _tx_queue_receive};
+use super::{error::TxError, WaitOption};
 use crate::pool::MemoryBlock;
 use crate::tx_checked_call;
-use super::{error::TxError, WaitOption};
-use defmt::debug;
+use core::mem::size_of;
+use core::{ffi::CStr, mem::MaybeUninit};
 use defmt::error;
 use num_traits::FromPrimitive;
+use threadx_sys::{_tx_queue_create, _tx_queue_receive, _tx_queue_send, TX_QUEUE, ULONG};
 
-pub struct Queue<T>(MaybeUninit<TX_QUEUE>,core::marker::PhantomData<T>);
+pub struct Queue<T>(MaybeUninit<TX_QUEUE>, core::marker::PhantomData<T>);
 
-impl <T>Queue<T> {
+impl<T> Queue<T> {
     // according to the threadx docs, the supported messages sizes are 1 to 16 32 bit words
-    const SIZE_OK: () = assert!(size_of::<T>() >= size_of::<u32>() && size_of::<T>() <= (size_of::<u32>()*16));
+    const SIZE_OK: () =
+        assert!(size_of::<T>() >= size_of::<u32>() && size_of::<T>() <= (size_of::<u32>() * 16));
 
     pub const fn new() -> Self {
         let _ = Self::SIZE_OK;
-        Queue(core::mem::MaybeUninit::uninit(),core::marker::PhantomData)
+        Queue(core::mem::MaybeUninit::uninit(), core::marker::PhantomData)
     }
-
+    //TODO: Queue must not necessary live for 'static but can live as long as the memory block does
     pub fn initialize(
         &'static mut self,
         name: &CStr,
-        mut queue_memory: MemoryBlock,
-    ) -> Result<(QueueSender<T>,QueueReceiver<T>), TxError> {       
+        queue_memory: MemoryBlock<'static>,
+    ) -> Result<(QueueSender<T>, QueueReceiver<T>), TxError> {
         let queue_ptr = self.0.as_mut_ptr();
         let queue_memory = queue_memory.consume();
-        if queue_ptr.is_null() {
-            panic!("Queue ptr is null");
-        }
-        unsafe {
-            if !(*queue_ptr).tx_queue_start.is_null() {
-                panic!("Queue is already initialized");
-            }
-        }
+
         tx_checked_call!(_tx_queue_create(
             queue_ptr,
             name.as_ptr() as *mut i8,
@@ -60,16 +53,20 @@ impl <T>Queue<T> {
             queue_memory.as_mut_ptr() as *mut core::ffi::c_void,
             queue_memory.len() as ULONG
         ))
-        .map(|_| (QueueSender(queue_ptr,core::marker::PhantomData),QueueReceiver(queue_ptr,core::marker::PhantomData)))
+        .map(|_| {
+            (
+                QueueSender(queue_ptr, core::marker::PhantomData),
+                QueueReceiver(queue_ptr, core::marker::PhantomData),
+            )
+        })
     }
 }
 
-pub struct QueueSender<T>(*mut TX_QUEUE,core::marker::PhantomData<T>);
-pub struct QueueReceiver<T>(*mut TX_QUEUE,core::marker::PhantomData<T>);
+pub struct QueueSender<T>(*mut TX_QUEUE, core::marker::PhantomData<T>);
+pub struct QueueReceiver<T>(*mut TX_QUEUE, core::marker::PhantomData<T>);
 
-impl <T>QueueSender<T> {
+impl<T> QueueSender<T> {
     pub fn send(&self, message: T, wait: WaitOption) -> Result<(), TxError> {
-        
         tx_checked_call!(_tx_queue_send(
             self.0,
             &message as *const T as *mut core::ffi::c_void,
@@ -78,13 +75,14 @@ impl <T>QueueSender<T> {
     }
 }
 
-impl <T> QueueReceiver<T> {
+impl<T> QueueReceiver<T> {
     pub fn receive(&self, wait: WaitOption) -> Result<T, TxError> {
         let mut message = core::mem::MaybeUninit::uninit();
         tx_checked_call!(_tx_queue_receive(
             self.0,
             message.as_mut_ptr() as *mut core::ffi::c_void,
             wait as ULONG
-        )).map(|_| unsafe{message.assume_init()})
+        ))
+        .map(|_| unsafe { message.assume_init() })
     }
 }
