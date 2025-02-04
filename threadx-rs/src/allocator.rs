@@ -65,19 +65,20 @@ unsafe impl GlobalAlloc for ThreadXAllocator {
         // TODO: Handle alignment
         let mut ptr: *mut c_void = core::ptr::null_mut() as *mut c_void;
         // Safety: _tx_byte_allocate is thread safe so it is ok to use the pool_ptr ie. a pointer into the static mut struct
-        tx_checked_call!(_tx_byte_allocate(
+        let res = tx_checked_call!(_tx_byte_allocate(
             self.pool_ptr,
             &mut ptr,
             layout.size() as ULONG,
             TX_WAIT_FOREVER
         ))
         .map(|_| ptr as *mut u8)
-        .unwrap()
+        .unwrap();
+
+        res
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
         // Safety: _tx_byte_allocate is thread safe so it is ok to use the pool_ptr ie. a pointer into the static mut struct
-
         tx_checked_call!(_tx_byte_release(ptr as *mut c_void)).unwrap()
     }
 }

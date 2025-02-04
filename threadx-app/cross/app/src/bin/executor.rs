@@ -73,11 +73,11 @@ fn main() -> ! {
                 )
                 .unwrap();
 
-            let thread2_fn = Box::new(move || loop {
+            let thread2_fn = Box::new(move ||  { loop {
                 spawner.spawn(async {
                     println!("Hello from the async runtime");
                 });
-                sleep(Duration::from_secs(1));
+                sleep(Duration::from_secs(1));}
             });
 
             let thread2 = THREAD2.init(Thread::new());

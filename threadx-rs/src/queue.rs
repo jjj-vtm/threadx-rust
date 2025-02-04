@@ -20,9 +20,9 @@ UINT        _tx_queue_front_send(TX_QUEUE *queue_ptr, VOID *source_ptr, ULONG wa
 use super::{error::TxError, WaitOption};
 use crate::pool::MemoryBlock;
 use crate::tx_checked_call;
-use core::mem::size_of;
+use core::mem::{self, size_of};
 use core::{ffi::CStr, mem::MaybeUninit};
-use defmt::error;
+use defmt::{error, println};
 use num_traits::FromPrimitive;
 use threadx_sys::{_tx_queue_create, _tx_queue_receive, _tx_queue_send, TX_QUEUE, ULONG};
 
@@ -44,7 +44,7 @@ impl<T> Queue<T> {
         queue_memory: &'static mut [u8],
     ) -> Result<(QueueSender<T>, QueueReceiver<T>), TxError> {
         let queue_ptr = self.0.as_mut_ptr();
-
+        println!("Creating queue with message size: {}", size_of::<T>());
         tx_checked_call!(_tx_queue_create(
             queue_ptr,
             name.as_ptr() as *mut i8,
@@ -71,12 +71,15 @@ pub struct QueueReceiver<T>(*mut TX_QUEUE, core::marker::PhantomData<T>);
 unsafe impl<T> Send for QueueReceiver<T>{}
 
 impl<T> QueueSender<T> {
+    // Currently it leaks the message ie. no deconstructor will run
     pub fn send(&self, message: T, wait: WaitOption) -> Result<(), TxError> {
-        tx_checked_call!(_tx_queue_send(
+        let res = tx_checked_call!(_tx_queue_send(
             self.0,
             &message as *const T as *mut core::ffi::c_void,
             wait as ULONG
-        ))
+        ));
+        mem::forget(message);
+        res
     }
 }
 
