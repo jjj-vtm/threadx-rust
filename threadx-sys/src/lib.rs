@@ -4,6 +4,8 @@ use core::ffi::c_void;
 
 include!("generated.rs");
 
+unsafe impl Send for TX_MUTEX {}
+unsafe impl Sync for TX_MUTEX {}
 // Functions that are implemented in assembly that are missed by bindgen
 // TODO: the SVCall and PendSV call are probably specific to Arm Cortex
 // and should be enabled based on the selected target.

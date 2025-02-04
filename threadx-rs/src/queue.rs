@@ -41,10 +41,9 @@ impl<T> Queue<T> {
     pub fn initialize(
         &'static mut self,
         name: &CStr,
-        queue_memory: MemoryBlock<'static>,
+        queue_memory: &'static mut [u8],
     ) -> Result<(QueueSender<T>, QueueReceiver<T>), TxError> {
         let queue_ptr = self.0.as_mut_ptr();
-        let queue_memory = queue_memory.consume();
 
         tx_checked_call!(_tx_queue_create(
             queue_ptr,
@@ -62,8 +61,14 @@ impl<T> Queue<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct QueueSender<T>(*mut TX_QUEUE, core::marker::PhantomData<T>);
+unsafe impl<T> Send for QueueSender<T>{}
+
+unsafe impl<T> Sync for QueueSender<T>{}
+    
 pub struct QueueReceiver<T>(*mut TX_QUEUE, core::marker::PhantomData<T>);
+unsafe impl<T> Send for QueueReceiver<T>{}
 
 impl<T> QueueSender<T> {
     pub fn send(&self, message: T, wait: WaitOption) -> Result<(), TxError> {

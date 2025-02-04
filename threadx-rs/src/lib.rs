@@ -14,6 +14,7 @@ pub mod semaphore;
 pub mod thread;
 pub mod time;
 pub mod timer;
+pub mod executor;
 
 pub use threadx_sys::__tx_PendSVHandler as tx_pendsv_handler;
 pub use threadx_sys::_tx_timer_interrupt as tx_timer_interrupt;

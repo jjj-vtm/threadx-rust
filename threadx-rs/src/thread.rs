@@ -1,5 +1,4 @@
 use core::ffi::{c_void, CStr};
-use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::time::Duration;
 
