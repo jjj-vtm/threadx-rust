@@ -76,7 +76,7 @@ fn main() -> ! {
                 }
             };
 
-            let th_handle = thread
+            let _th_handle = thread
                 .initialize_with_autostart("thread1", thread1_func, task1_mem.consume(), 1, 1, 0)
                 .unwrap();
 
@@ -93,9 +93,10 @@ fn main() -> ! {
             };
             let thread2 = THREAD2.init(Thread::new());
 
-            let th2_handle = thread2
+            let _th2_handle = thread2
                 .initialize_with_autostart("thread2", thread2_fn, task2_mem.consume(), 1, 1, 0)
                 .unwrap();
+            println!("Init done.")
         },
     );
 

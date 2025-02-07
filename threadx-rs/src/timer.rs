@@ -22,6 +22,7 @@ use core::ffi::c_void;
 use core::ffi::CStr;
 
 use super::error::TxError;
+use defmt::println;
 use num_traits::FromPrimitive;
 use threadx_sys::_tx_timer_create;
 use threadx_sys::TX_SUCCESS;
@@ -54,6 +55,7 @@ impl Timer {
         auto_activate: bool,
     ) -> Result<(), TxError> {
         let timer = self.0.as_mut_ptr();
+        println!("Initialized stuff");
 
         // Calling into_raw on Box<dyn Fn()> gets a *mut dyn Fn() which is a wide pointer (https://doc.rust-lang.org/nomicon/exotic-sizes.html) ie. cannot directly be interpreted as a ULONG.
         // Therefore we box the pointer and call into_raw so expiration_function_ptr points to the wide pointer on the heap. This leaks two boxes ie. the closure and the pointer to the closure but those have to be valid for the whole time.
@@ -66,6 +68,7 @@ impl Timer {
         let initial_ticks = TxTicks::from(initial_ticks).into();
         let reschedule_ticks = TxTicks::from(reschedule_ticks).into();
         let auto_activate = if auto_activate { 1 } else { 0 };
+
 
         let res = unsafe {
             _tx_timer_create(
