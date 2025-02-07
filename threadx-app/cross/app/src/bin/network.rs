@@ -9,6 +9,7 @@ use core::time::Duration;
 use alloc::boxed::Box;
 use board::{BoardMxAz3166, LowLevelInit};
 
+use cortex_m::itm::Aligned;
 use defmt::println;
 use minimq::broker::IpBroker;
 use minimq::embedded_time::rate::Fraction;
@@ -47,8 +48,10 @@ fn main() -> ! {
         |mem_start| {
             defmt::println!("Define application. Memory starts at: {} ", mem_start);
 
-            let heap = HEAP.init_with(||[0u8; 1024]);
-            GLOBAL.initialize(heap).unwrap();
+            let heap = Aligned([0; 1024]);
+            let heap_mem = HEAP.init_with(||heap.0);
+
+            GLOBAL.initialize(heap_mem).unwrap();
 
             // Static Cell since we need an allocated but uninitialized block of memory
             let wifi_thread_stack = WIFI_THREAD_STACK.init_with(|| [0u8; 8192]);

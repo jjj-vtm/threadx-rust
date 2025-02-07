@@ -41,7 +41,7 @@ impl ThreadXAllocator {
         allocator
     }
 
-    pub fn initialize(&'static self, pool_memory: &mut [u8]) -> Result<(), TxError> {
+    pub fn initialize(&'static self, pool_memory: &'static mut [u8]) -> Result<(), TxError> {
         // Panic if initialized twice. Check if name is not global (and not zero)
         let res = tx_checked_call!(_tx_byte_pool_create(
             self.pool_ptr,

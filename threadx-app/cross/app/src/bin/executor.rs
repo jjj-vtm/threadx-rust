@@ -7,6 +7,7 @@ use core::time::Duration;
 use alloc::boxed::Box;
 use board::{BoardMxAz3166, LowLevelInit};
 
+use cortex_m::itm::Aligned;
 use defmt::println;
 use static_cell::StaticCell;
 use threadx_rs::allocator::ThreadXAllocator;
@@ -53,8 +54,9 @@ fn main() -> ! {
             let task1_mem = bp.allocate(512, true).unwrap();
             let task2_mem = bp.allocate(512, true).unwrap();
 
-            let heap = HEAP.init([0u8; 1024]);
-            GLOBAL.initialize(heap).unwrap();
+            let heap: Aligned<[u8; 1024]> = Aligned([0; 1024]);
+            let heap_mem = HEAP.init_with(||heap.0);
+            GLOBAL.initialize(heap_mem).unwrap();
 
             let (executor, spawner) = new_executor_and_spawner();
             let executor_thread = THREAD1.init(Thread::new());

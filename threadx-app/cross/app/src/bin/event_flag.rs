@@ -60,9 +60,11 @@ fn main() -> ! {
             let task2_mem = bp.allocate(256, true).unwrap();
             let task3_mem = bp.allocate(256, true).unwrap();
 
-            let mut heap = Aligned([0; 1024]);
+            //TODO: This is too short lived ... types are not correct
+            let heap = Aligned([0; 1024]);
+            let heap_mem = HEAP.init_with(||heap.0);
 
-            GLOBAL.initialize(&mut heap.0).unwrap();
+            GLOBAL.initialize(heap_mem).unwrap();
 
             // create events flag group
             let event_group = EVENT_GROUP.init(EventFlagsGroup::new());
