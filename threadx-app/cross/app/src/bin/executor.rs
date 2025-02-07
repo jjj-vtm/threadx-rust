@@ -13,6 +13,7 @@ use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::executor::new_executor_and_spawner;
 use threadx_rs::pool::{self, BytePool};
 
+use threadx_rs::queue::Queue;
 use threadx_rs::thread::{sleep, Thread};
 
 extern crate alloc;
@@ -77,7 +78,7 @@ fn main() -> ! {
                 spawner.spawn(async {
                     println!("Hello from the async runtime");
                 });
-                sleep(Duration::from_secs(1));}
+                let _ = sleep(Duration::from_secs(1));}
             });
 
             let thread2 = THREAD2.init(Thread::new());

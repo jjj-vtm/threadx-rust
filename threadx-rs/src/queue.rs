@@ -18,7 +18,6 @@ UINT        _tx_queue_front_send(TX_QUEUE *queue_ptr, VOID *source_ptr, ULONG wa
 */
 
 use super::{error::TxError, WaitOption};
-use crate::pool::MemoryBlock;
 use crate::tx_checked_call;
 use core::mem::{self, size_of};
 use core::{ffi::CStr, mem::MaybeUninit};
@@ -26,8 +25,13 @@ use defmt::{error, println};
 use num_traits::FromPrimitive;
 use threadx_sys::{_tx_queue_create, _tx_queue_receive, _tx_queue_send, TX_QUEUE, ULONG};
 
+/// Wrapper around the ThreadX queue. ThreadX will copy the message so the best approximation is to restrict the type to be Copy. 
+/// Since messages might be received by a different thread any reference must be valid for 'static. Note that the message struct will be dropped 
+/// at the end of this function. 
 pub struct Queue<T>(MaybeUninit<TX_QUEUE>, core::marker::PhantomData<T>);
+//pub struct Queue<T: Copy + 'static>(MaybeUninit<TX_QUEUE>, core::marker::PhantomData<T>);
 
+//impl<T: core::marker::Copy + 'static> Queue<T> {
 impl<T> Queue<T> {
     // according to the threadx docs, the supported messages sizes are 1 to 16 32 bit words
     const SIZE_OK: () =
@@ -63,22 +67,25 @@ impl<T> Queue<T> {
 
 #[derive(Clone)]
 pub struct QueueSender<T>(*mut TX_QUEUE, core::marker::PhantomData<T>);
-unsafe impl<T> Send for QueueSender<T>{}
+/// Safety: QueueSender is Sync and Send since the internal pointer is not exposed and the calls to send/sync
+/// can be done from any Thread as per ThreadX documentation.
 
-unsafe impl<T> Sync for QueueSender<T>{}
-    
+unsafe impl<T> Send for QueueSender<T> {}
+unsafe impl<T> Sync for QueueSender<T> {}
+
+/// Safety: QueueReceiver is Sync and Send since the internal pointer is not exposed and the calls to send/sync
+/// can be done from any Thread as per ThreadX documentation.
 pub struct QueueReceiver<T>(*mut TX_QUEUE, core::marker::PhantomData<T>);
-unsafe impl<T> Send for QueueReceiver<T>{}
+unsafe impl<T> Send for QueueReceiver<T> {}
+unsafe impl<T> Sync for QueueReceiver<T> {}
 
 impl<T> QueueSender<T> {
-    // Currently it leaks the message ie. no deconstructor will run
     pub fn send(&self, message: T, wait: WaitOption) -> Result<(), TxError> {
         let res = tx_checked_call!(_tx_queue_send(
             self.0,
             &message as *const T as *mut core::ffi::c_void,
             wait as ULONG
         ));
-        mem::forget(message);
         res
     }
 }
@@ -91,6 +98,9 @@ impl<T> QueueReceiver<T> {
             message.as_mut_ptr() as *mut core::ffi::c_void,
             wait as ULONG
         ))
-        .map(|_| unsafe { message.assume_init() })
+        .map(|_| unsafe {
+            //Safety: Message was initialized by ThreadX since the call returned successful.
+            message.assume_init()
+        })
     }
 }

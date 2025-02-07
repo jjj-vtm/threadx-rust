@@ -11,7 +11,6 @@ use static_cell::StaticCell;
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::EventFlagsGroup;
 use threadx_rs::executor::new_executor_and_spawner;
-use threadx_rs::mutex::Mutex;
 use threadx_rs::pool::{self, BytePool};
 use threadx_rs::timer::Timer;
 use threadx_rs::WaitOption;
@@ -63,7 +62,6 @@ fn main() -> ! {
 
             let heap = HEAP.init([0u8; 1024]);
             GLOBAL.initialize(heap).unwrap();
-            let mut mutex = Mutex::new(2);
 
             // create events flag group
             let event_group = EVENT_GROUP.init(EventFlagsGroup::new());
@@ -100,7 +98,6 @@ fn main() -> ! {
                     )
                     .expect("Thread1 failed");
                 println!("Thread1: Got Event 1 : {}", event);
-                let (executor, spawner) = new_executor_and_spawner();
                 threadx_rs::thread::sleep(core::time::Duration::from_millis(100)).unwrap();
             });
 

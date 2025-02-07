@@ -1,74 +1,73 @@
 #![no_main]
 #![no_std]
 
+use core::ffi::CStr;
 
 use board::{BoardMxAz3166, LowLevelInit};
 
-use defmt::{debug, println};
-use stm32f1xx_hal::pac::can1::rx;
-use threadx_rs::event_flags::{EventFlagsGroup};
-use threadx_rs::timer::Timer;
-use threadx_rs::{tx_checked_call, WaitOption};
+use defmt::println;
+use static_cell::StaticCell;
 use threadx_rs::allocator::ThreadXAllocator;
-use threadx_rs::mutex::Mutex;
-use threadx_rs::pool::{BlockPool, BytePool, BytePoolHandle};
 
+use threadx_rs::pool::BytePool;
 use threadx_rs::queue::Queue;
-use threadx_rs::semaphore::{Semaphore, SemaphoreOwner, SemaphoreUser};
-use threadx_rs::thread::{Thread, sleep};
-use threadx_rs::tx_str;
+use threadx_rs::thread::{sleep, Thread};
+use threadx_rs::WaitOption;
 
 extern crate alloc;
-use threadx_sys::_tx_event_flags_get;
-
 
 pub enum Event {
     Event,
     Info(u32),
 }
+#[global_allocator]
+static GLOBAL: ThreadXAllocator = ThreadXAllocator::new();
 
+static HEAP: StaticCell<[u8; 1024]> = StaticCell::new();
+static BP_MEM: StaticCell<[u8; 1024]> = StaticCell::new();
+static QUEUE: StaticCell<Queue<Event>> = StaticCell::new();
+static THREAD1: StaticCell<Thread> = StaticCell::new();
+static THREAD2: StaticCell<Thread> = StaticCell::new();
+static BP: StaticCell<BytePool> = StaticCell::new();
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
-    defmt::println!("Hello, world!");    
+    defmt::println!("Hello, world!");
 
     let tx = threadx_rs::Builder::new(
         // low level initialization
         |ticks_per_second| {
             BoardMxAz3166::low_level_init(ticks_per_second).unwrap();
-            static mut HEAP: [u8; 4096*3] = [0u8; 4096*3];
         },
         // Start of Application definition
         |mem_start| {
+            defmt::println!("Define application. Memory starts at: {} ", mem_start);
+            let heap = HEAP.init([0u8; 1024]);
+            GLOBAL.initialize(heap).unwrap();
+            let bp_mem = BP_MEM.init([0u8; 1024]);
+            let bp = BP.init(BytePool::new());
 
-            defmt::println!("Define application. Memory starts at: {} with length:{}", mem_start.as_ptr(), mem_start.len());
-            static mut BP: BytePool = BytePool::new();
-         
-            let (bp_mem , next)= mem_start.split_at_mut(2048);
-            
-            let bp = unsafe{BP.initialize(tx_str!("pool1"), bp_mem).unwrap()};
-            
+            let bp = bp
+                .initialize(CStr::from_bytes_until_nul(b"pool1\0").unwrap(), bp_mem)
+                .unwrap();
             //allocate memory for the two tasks.
             let task1_mem = bp.allocate(256, true).unwrap();
             let task2_mem = bp.allocate(256, true).unwrap();
             let queue_mem = bp.allocate(64, true).unwrap();
-            
+            let queue = QUEUE.init(Queue::new());
+            let (sender, receiver) = queue
+                .initialize(
+                    CStr::from_bytes_with_nul(b"queue\0").unwrap(),
+                    queue_mem.consume(),
+                )
+                .unwrap();
 
-            #[global_allocator]
-            static mut GLOBAL: ThreadXAllocator = ThreadXAllocator::new();
-            unsafe{GLOBAL.initialize(next).unwrap()};
-
-            static mut QUEUE : Queue<Event> = Queue::new();
-            let (sender, receiver) = unsafe{QUEUE.initialize(tx_str!("queue"), queue_mem).unwrap()};
-
-
-            static mut thread : Thread = Thread::new();
+            let thread = THREAD1.init(Thread::new());
             let thread1_func = move || {
+                let mut arg: u32 = 0;
 
-                let mut arg : u32 = 0;                
-                
                 println!("Thread 1:{}", arg);
-                let mut count : u32 = 1;
+                let mut count: u32 = 1;
                 loop {
                     let message = Event::Info(count);
                     sender.send(message, WaitOption::WaitForever).unwrap();
@@ -77,31 +76,26 @@ fn main() -> ! {
                 }
             };
 
-            let th_handle = unsafe {
-                thread.initialize(tx_str!("thread1"), thread1_func, task1_mem, 1, 1, 0, true).unwrap()
-            };
+            let th_handle = thread
+                .initialize_with_autostart("thread1", thread1_func, task1_mem.consume(), 1, 1, 0)
+                .unwrap();
 
-            let thread2_fn = move || {
-
-                loop {
-                    let msg = receiver.receive(WaitOption::WaitForever).unwrap();
-                    match msg {
-                        Event::Event => {
-                            println!("Thread 2: RX Event");
-                        },
-                        Event::Info(info) => {
-                            println!("Thread 2: RX Info:{}", info);
-                        }
+            let thread2_fn = move || loop {
+                let msg = receiver.receive(WaitOption::WaitForever).unwrap();
+                match msg {
+                    Event::Event => {
+                        println!("Thread 2: RX Event");
                     }
-                    
+                    Event::Info(info) => {
+                        println!("Thread 2: RX Info:{}", info);
+                    }
                 }
             };
-            static mut thread2 : Thread = Thread::new();
+            let thread2 = THREAD2.init(Thread::new());
 
-            let th2_handle = unsafe {
-                thread2.initialize(tx_str!("thread1"), thread2_fn, task2_mem, 1, 1, 0, true).unwrap()
-            };
-
+            let th2_handle = thread2
+                .initialize_with_autostart("thread2", thread2_fn, task2_mem.consume(), 1, 1, 0)
+                .unwrap();
         },
     );
 
@@ -109,8 +103,3 @@ fn main() -> ! {
     println!("Exit");
     threadx_app::exit()
 }
-
-
-
-
-

@@ -35,6 +35,14 @@ impl Thread {
     }
 }
 
+fn __threadx_fn(val: u32) {
+    todo!()
+}
+// Design sketch to work with statically allocated "ThreadXTasks" which you can give to the ThreadX runtime... 
+struct  ThreadXTask{} 
+fn threadx_fn(val: u32) -> ThreadXTask {
+    todo!()
+}
 unsafe extern "C" fn thread_trampoline<F>(arg: ULONG)
 where
     F: Fn(),

@@ -66,8 +66,6 @@ impl EventFlagsGroup {
 
 impl EventFlagsGroupHandle {
     pub fn publish(&self, flags_to_set: u32) -> Result<(), TxError> {
-        defmt::println!("Publish: ptr is: {}", self.flag_group_ptr);
-
         tx_checked_call!(_tx_event_flags_set(self.flag_group_ptr, flags_to_set, 0))
     }
 

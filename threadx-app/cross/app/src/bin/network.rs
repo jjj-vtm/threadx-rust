@@ -91,7 +91,7 @@ fn start_clock() -> impl Clock {
         }
     }
 
-    extern "C" fn clock_tick(arg: ULONG) {
+    extern "C" fn clock_tick(_arg: ULONG) {
         TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
     }
 

@@ -32,13 +32,12 @@ unsafe impl Sync for ThreadXAllocator {}
 
 impl ThreadXAllocator {
     pub const fn new() -> Self {
-
         // TODO: Make this return None if already initialized
         let allocator = ThreadXAllocator {
             pool_ptr: &raw mut POOL_STRUCT,
             initialized: AtomicBool::new(false),
         };
-        
+
         allocator
     }
 
@@ -62,6 +61,10 @@ unsafe impl GlobalAlloc for ThreadXAllocator {
         if !self.initialized.load(core::sync::atomic::Ordering::Relaxed) {
             panic!("Use of ThreadX allocator before it was initialized");
         }
+        // ThreadX always returned memory blocks of multiple of sizeof(ULONG) = 4bytes (at least in our case)
+        // ThreadX comment:
+        // "Round the memory size up to the next size that is evenly divisible by
+        // an ALIGN_TYPE (this is typically a 32-bit ULONG).  This guarantees proper alignment" 
         // TODO: Handle alignment
         let mut ptr: *mut c_void = core::ptr::null_mut() as *mut c_void;
         // Safety: _tx_byte_allocate is thread safe so it is ok to use the pool_ptr ie. a pointer into the static mut struct
@@ -73,7 +76,11 @@ unsafe impl GlobalAlloc for ThreadXAllocator {
         ))
         .map(|_| ptr as *mut u8)
         .unwrap();
-
+        // Sanity check
+        println!("Allocated pointer at {:x}", ptr.addr());
+        if ptr.addr() % layout.align() != 0 {
+            println!("Pointer not aligned to {:x} ... wtf", layout.align());
+        }
         res
     }
 
