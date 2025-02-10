@@ -2,6 +2,9 @@
 #![no_std]
 
 use core::ffi::CStr;
+use core::future::Future;
+use core::pin::Pin;
+use core::task::{Context, Poll};
 use core::time::Duration;
 
 use alloc::boxed::Box;
@@ -57,13 +60,12 @@ fn main() -> ! {
             GLOBAL.initialize(heap_mem).unwrap();
 
             let evt = EXECUTOR_EVENT.init(EventFlagsGroup::new());
-            let event_handle = evt.initialize(CStr::from_bytes_with_nul(b"ExecutorGroup\0").unwrap()).unwrap();
+            let event_handle = evt
+                .initialize(CStr::from_bytes_with_nul(b"ExecutorGroup\0").unwrap())
+                .unwrap();
 
             let thread2_fn = Box::new(move || loop {
-                let fut = async {
-                    println!("Hello from the async runtime");
-                };
-                block_on(fut, event_handle);
+                block_on(NeverFinished {}, event_handle);
                 let _ = sleep(Duration::from_secs(1));
             });
 
@@ -80,4 +82,16 @@ fn main() -> ! {
     tx.initialize();
     println!("Exit");
     threadx_app::exit()
+}
+
+struct NeverFinished {}
+
+impl Future for NeverFinished {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let w1 = cx.waker().clone();
+        let w2 = cx.waker().clone();
+        Poll::Pending
+    }
 }

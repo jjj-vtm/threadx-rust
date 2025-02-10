@@ -1,22 +1,50 @@
+/*
+Copyright (c) 2020-2021 Joshua Barretto
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+*/
+
+
 use core::{
     ffi::CStr,
     future::{Future, IntoFuture},
-    mem,
-    pin::{pin, Pin},
     task::{Context, Poll, Waker},
 };
 
 use crate::WaitOption::WaitForever;
 use defmt::println;
-use static_cell::StaticCell;
-use threadx_sys::{TX_AND_CLEAR, TX_WAIT_FOREVER};
 
 use crate::{
     event_flags::EventFlagsGroupHandle,
-    mutex::{self, Mutex},
-    queue::{Queue, QueueReceiver, QueueSender},
+    mutex::Mutex,
 };
 extern crate alloc;
+
+/*
+ * A port of the main parts of the pollster library using ThreadX components.
+ */
 
 #[derive(Clone, Copy)]
 enum SignalState {
@@ -32,13 +60,16 @@ struct Signal {
 
 impl Signal {
     fn new(event_flag_handle: EventFlagsGroupHandle) -> Self {
+        let mut mutex = Mutex::new(SignalState::Empty);
+        mutex.initialize(CStr::from_bytes_with_nul(b"SignalMutex\0").unwrap(), false).unwrap();
         Self {
-            state: Mutex::new(SignalState::Empty),
-            event_flag_handle,
+            state: mutex,
+            event_flag_handle: event_flag_handle,
         }
     }
 
     fn wait(&self) {
+        println!("Waiting ...");
         let mut state = self.state.lock(WaitForever).unwrap();
         match *state {
             // Notify() was called before we got here, consume it here without waiting and return immediately.
@@ -54,14 +85,22 @@ impl Signal {
                 // accordingly and begin polling the condvar in a loop until it's no longer telling us to wait. The
                 // loop prevents incorrect spurious wakeups.
                 *state = SignalState::Waiting;
-                // Release the mutex
+                // Release the mutex. 
                 drop(state);
-                // Wait for notification. TODO: What happens if we were preempted in between?
-                self.event_flag_handle.get(
-                    0x1,
-                    crate::event_flags::GetOption::WaitAllAndClear,
-                    WaitForever,
-                ).unwrap();
+                // Wait for notification. TODO: What happens if we were preempted in between? Wait can only be called by
+                // the executor routine when the future was PENDING. What might happen is that between the Mutex drop and the
+                // waiting for the event flag a notification came in ie.
+                // MUTEX_UNLOCK --> Preempt Executor Thread --> notify_called on different thread.
+                // ThreadX seems to guarantee no spurious wakeups so we can assume that this thread is only woken up after
+                // the request flag is SIGNALED_X
+
+                self.event_flag_handle
+                    .get(
+                        0x1,
+                        crate::event_flags::GetOption::WaitAllAndClear,
+                        WaitForever,
+                    )
+                    .unwrap();
             }
         }
     }
@@ -120,7 +159,10 @@ pub fn block_on<F: IntoFuture>(fut: F, event_flag_handle: EventFlagsGroupHandle)
     // Poll the future to completion
     loop {
         match fut.as_mut().poll(&mut context) {
-            Poll::Pending => signal.wait(),
+            Poll::Pending => {
+                println!("Polling a future");
+                signal.wait()
+            }
             Poll::Ready(item) => break item,
         }
     }

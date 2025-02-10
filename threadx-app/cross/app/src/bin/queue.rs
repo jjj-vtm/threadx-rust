@@ -15,7 +15,7 @@ use threadx_rs::thread::{sleep, Thread};
 use threadx_rs::WaitOption;
 
 extern crate alloc;
-
+#[derive(Clone, Copy)]
 pub enum Event {
     Event,
     Info(u32),
