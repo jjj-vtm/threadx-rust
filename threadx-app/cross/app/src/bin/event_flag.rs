@@ -11,7 +11,6 @@ use defmt::println;
 use static_cell::StaticCell;
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::EventFlagsGroup;
-use threadx_rs::executor::new_executor_and_spawner;
 use threadx_rs::pool::{self, BytePool};
 use threadx_rs::timer::Timer;
 use threadx_rs::WaitOption;

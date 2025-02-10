@@ -28,11 +28,9 @@ use threadx_sys::{_tx_queue_create, _tx_queue_receive, _tx_queue_send, TX_QUEUE,
 /// Wrapper around the ThreadX queue. ThreadX will copy the message so the best approximation is to restrict the type to be Copy. 
 /// Since messages might be received by a different thread any reference must be valid for 'static. Note that the message struct will be dropped 
 /// at the end of this function. 
-pub struct Queue<T>(MaybeUninit<TX_QUEUE>, core::marker::PhantomData<T>);
-//pub struct Queue<T: Copy + 'static>(MaybeUninit<TX_QUEUE>, core::marker::PhantomData<T>);
+pub struct Queue<T: Copy + 'static>(MaybeUninit<TX_QUEUE>, core::marker::PhantomData<T>);
 
-//impl<T: core::marker::Copy + 'static> Queue<T> {
-impl<T> Queue<T> {
+impl<T: core::marker::Copy + 'static> Queue<T> {
     // according to the threadx docs, the supported messages sizes are 1 to 16 32 bit words
     const SIZE_OK: () =
         assert!(size_of::<T>() >= size_of::<u32>() && size_of::<T>() <= (size_of::<u32>() * 16));

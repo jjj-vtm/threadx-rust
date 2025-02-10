@@ -32,7 +32,7 @@ pub enum SetOption {
     SetAny = threadx_sys::TX_OR,
 }
 
-pub struct EventFlagsGroup{
+pub struct EventFlagsGroup {
     flag_group: MaybeUninit<TX_EVENT_FLAGS_GROUP>,
 }
 #[derive(Copy, Clone)]
@@ -40,11 +40,14 @@ pub struct EventFlagsGroup{
 pub struct EventFlagsGroupHandle {
     pub flag_group_ptr: *mut TX_EVENT_FLAGS_GROUP,
 }
+/// Safety: Interaction with this pointer is only done via get/publish methods which is safe to do from different threads 
+unsafe impl Send for EventFlagsGroupHandle {}
+unsafe impl Sync for EventFlagsGroupHandle {}
 
 pub struct UnInitialized;
 pub struct Initialized;
 
-impl EventFlagsGroup{
+impl EventFlagsGroup {
     pub const fn new() -> EventFlagsGroup {
         EventFlagsGroup {
             flag_group: core::mem::MaybeUninit::uninit(),

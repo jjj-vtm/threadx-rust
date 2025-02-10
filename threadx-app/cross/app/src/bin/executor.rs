@@ -11,10 +11,10 @@ use cortex_m::itm::Aligned;
 use defmt::println;
 use static_cell::StaticCell;
 use threadx_rs::allocator::ThreadXAllocator;
-use threadx_rs::executor::new_executor_and_spawner;
+use threadx_rs::event_flags::EventFlagsGroup;
+use threadx_rs::executor::block_on;
 use threadx_rs::pool::{self, BytePool};
 
-use threadx_rs::queue::Queue;
 use threadx_rs::thread::{sleep, Thread};
 
 extern crate alloc;
@@ -24,13 +24,12 @@ static GLOBAL: ThreadXAllocator = ThreadXAllocator::new();
 
 static BP: StaticCell<BytePool> = StaticCell::new();
 
-
 static THREAD1: StaticCell<Thread> = StaticCell::new();
 static THREAD2: StaticCell<Thread> = StaticCell::new();
 
 static BP_MEM: StaticCell<[u8; 2048]> = StaticCell::new();
 static HEAP: StaticCell<[u8; 1024]> = StaticCell::new();
-
+static EXECUTOR_EVENT: StaticCell<EventFlagsGroup> = StaticCell::new();
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let tx = threadx_rs::Builder::new(
@@ -51,36 +50,21 @@ fn main() -> ! {
                 .unwrap();
 
             //allocate memory for the two tasks.
-            let task1_mem = bp.allocate(512, true).unwrap();
             let task2_mem = bp.allocate(512, true).unwrap();
 
             let heap: Aligned<[u8; 1024]> = Aligned([0; 1024]);
-            let heap_mem = HEAP.init_with(||heap.0);
+            let heap_mem = HEAP.init_with(|| heap.0);
             GLOBAL.initialize(heap_mem).unwrap();
 
-            let (executor, spawner) = new_executor_and_spawner();
-            let executor_thread = THREAD1.init(Thread::new());
+            let evt = EXECUTOR_EVENT.init(EventFlagsGroup::new());
+            let event_handle = evt.initialize(CStr::from_bytes_with_nul(b"ExecutorGroup\0").unwrap()).unwrap();
 
-            let thread_func = Box::new(move || loop {
-                executor.run();
-            });
-
-            let _ = executor_thread
-                .initialize_with_autostart_box(
-                    "executor_thread",
-                    thread_func,
-                    task1_mem.consume(),
-                    1,
-                    1,
-                    0,
-                )
-                .unwrap();
-
-            let thread2_fn = Box::new(move ||  { loop {
-                spawner.spawn(async {
+            let thread2_fn = Box::new(move || loop {
+                let fut = async {
                     println!("Hello from the async runtime");
-                });
-                let _ = sleep(Duration::from_secs(1));}
+                };
+                block_on(fut, event_handle);
+                let _ = sleep(Duration::from_secs(1));
             });
 
             let thread2 = THREAD2.init(Thread::new());
