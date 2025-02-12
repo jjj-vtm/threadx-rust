@@ -47,7 +47,7 @@ fn main() -> ! {
             let bp = BP.init(BytePool::new());
 
             // Inefficient, creates array on the stack first.
-            let bp_mem = BP_MEM.init([0u8; 2048]);
+            let bp_mem = BP_MEM.init_with(||[0u8; 2048]);
             let bp = bp
                 .initialize(CStr::from_bytes_until_nul(b"pool1\0").unwrap(), bp_mem)
                 .unwrap();

@@ -5,7 +5,6 @@ use core::ffi::c_void;
 use cortex_m::peripheral::syst::SystClkSource;
 use stm32f4xx_hal::pac;
 use stm32f4xx_hal::rcc::RccExt;
-use stm32f4xx_hal::time::MegaHertz;
 
 use stm32f4xx_hal::prelude::*;
 /// Low level initialization. The low level initialization function will

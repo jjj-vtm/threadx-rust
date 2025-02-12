@@ -32,6 +32,9 @@ use threadx_sys::_tx_mutex_get;
 use threadx_sys::_tx_mutex_put;
 use threadx_sys::TX_MUTEX;
 
+/// Safety: TODO: Is it safe to copy the TX_MUTEX structure? Currently nothing forbids rust to just move it ie. memcopy it. 
+/// Maybe initialization of the mutex should return a handle containing the pointer. This should be safe and the can live as long as the mutex. 
+/// But that maybe not enough since the original mutex struct can still be moved around...
 pub struct Mutex<T> {
     inner: UnsafeCell<T>,
     mutex: UnsafeCell<MaybeUninit<TX_MUTEX>>,

@@ -57,7 +57,7 @@ struct Signal {
     state: Mutex<SignalState>,
     event_flag_handle: EventFlagsGroupHandle,
 }
-
+// TODO: Does not work for more then one signal. Should work for 32 (number of event_flags)  
 impl Signal {
     fn new(event_flag_handle: EventFlagsGroupHandle) -> Self {
         let mut mutex = Mutex::new(SignalState::Empty);
@@ -68,8 +68,7 @@ impl Signal {
         }
     }
 
-    fn wait(&self) {
-        println!("Waiting ...");
+    fn wait(& self) {
         let mut state = self.state.lock(WaitForever).unwrap();
         match *state {
             // Notify() was called before we got here, consume it here without waiting and return immediately.
@@ -160,7 +159,6 @@ pub fn block_on<F: IntoFuture>(fut: F, event_flag_handle: EventFlagsGroupHandle)
     loop {
         match fut.as_mut().poll(&mut context) {
             Poll::Pending => {
-                println!("Polling a future");
                 signal.wait()
             }
             Poll::Ready(item) => break item,

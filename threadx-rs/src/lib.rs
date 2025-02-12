@@ -1,6 +1,5 @@
 #![no_std]
 use core::ffi::c_void;
-use core::ptr;
 
 use threadx_sys::_tx_initialize_kernel_enter;
 
@@ -63,7 +62,7 @@ impl Builder {
     /// callback is where the application is defined.
     /// This function then initializes the ThreadX kernel and starts the application threads
     /// that were defined in the ``app_define_cb``. This function does not return.
-    pub fn initialize(mut self) {
+    pub fn initialize(self) {
         //Safety:  The callbacks are called only after we call _tx_initialize_kernel_enter.  We call this
         // at the end of this function so we ensure that the callbacks are not called before we are ready.
         unsafe { INIT_CB = Some(self.low_level_init_cb) };
