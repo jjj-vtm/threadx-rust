@@ -1,9 +1,12 @@
 use std::env;
 use std::path::PathBuf;
+use std::path::Path;
 
 fn main() {
     // Tell cargo to look for shared libraries in the specified directory
-    println!("cargo:rustc-link-search=/Users/janjongen/Documents/workspace/threadx-rust/wiced-sys/src/");
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let wiced_src_path = Path::new(&manifest_dir).join("src");
+    println!("cargo:rustc-link-search={}", wiced_src_path.display());
 
 
     println!("cargo:rustc-link-lib=static=libwiced_sdk_bin");
@@ -13,8 +16,8 @@ fn main() {
     // the resulting bindings.
     let bindings = bindgen::Builder::default()
         // The input header we would like to generate
-        // bindings for.
-        .header("/Users/janjongen/Documents/workspace/threadx-rust/wiced-sys/src/wiced_sdk.h")
+        // bindings for
+        .header(wiced_src_path.join("wiced_sdk.h").to_str().unwrap())
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))

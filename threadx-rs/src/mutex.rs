@@ -35,8 +35,14 @@ use threadx_sys::TX_MUTEX;
 /// Safety: TODO: Is it safe to copy the TX_MUTEX structure? Currently nothing forbids rust to just move it ie. memcopy it. 
 /// Maybe initialization of the mutex should return a handle containing the pointer. This should be safe and the can live as long as the mutex. 
 /// But that maybe not enough since the original mutex struct can still be moved around...
+/// ThreadX documentation:
+/// Mutex Control Block TX_MUTEX
+/// The characteristics of each mutex are found in its control block. It contains information such as the current mutex ownership count along with the pointer 
+/// of the thread that owns the mutex. This structure is defined in the tx_api.h file. Mutex control blocks can be located anywhere in memory, but 
+/// it is most common to make the control block a global structure by defining it outside the scope of any function.
 pub struct Mutex<T> {
     inner: UnsafeCell<T>,
+    // TX_MUTEX control block
     mutex: UnsafeCell<MaybeUninit<TX_MUTEX>>,
     initialized: bool,
 }
