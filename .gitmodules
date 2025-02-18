@@ -1,0 +1,6 @@
+[submodule "netx-sys/shared/netxduo"]
+	path = netx-sys/shared/netxduo
+	url = https://github.com/eclipse-threadx/netxduo
+[submodule "netx-sys/shared/threadx"]
+	path = netx-sys/shared/threadx
+	url = https://github.com/eclipse-threadx/threadx

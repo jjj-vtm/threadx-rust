@@ -21,10 +21,7 @@ fn main() {
      *  with a submodule
      *  485a02faec6edccef14812ddce6844af1d7d2eef threadx (v6.0_rel-177-g485a02fa)
      */
-    let src_path = "/Users/janjongen/Documents/workspace/netxduo";
-    // TODO: Checkout netxduo with threadx as as submodule
-    let threadx_gh = "https://github.com/eclipse-threadx/netxduo.git";
-    let threadx_tag = "v6.4.0_rel";
+    let src_path = netx_manifest.join("shared");
 
     let nx_user_file_path = if let Some(nx_user_file) = nx_user_file {
         let nx_user_file = PathBuf::from(nx_user_file)
@@ -48,7 +45,7 @@ fn main() {
     # target = "thumbv6m-none-eabi"    # Cortex-M0 and Cortex-M0+
     # target = "thumbv7m-none-eabi"    # Cortex-M3
     # target = "thumbv7em-none-eabi"   # Cortex-M4 and Cortex-M7 (no FPU)
-    let target = "thumbv7em-none-eabihf" # Cortex-M4F and Cortex-M7F (with FPU)
+    # target = "thumbv7em-none-eabihf" # Cortex-M4F and Cortex-M7F (with FPU)
     # target = "thumbv8m.base-none-eabi"   # Cortex-M23
     # target = "thumbv8m.main-none-eabi"   # Cortex-M33 (no FPU)
     # target = "thumbv8m.main-none-eabihf" # Cortex-M33 (with FPU)
@@ -86,8 +83,8 @@ fn main() {
     let toolchain_file = match target.as_str() {
         "thumbv6m-none-eabi" => "cmake/cortex_m0.cmake",
         "thumbv7m-none-eabi" => "cmake/cortex_m3.cmake",
-        "thumbv7em-none-eabi" => "cmake/cortex_m4.cmake",
-        "thumbv7em-none-eabihf" => "cmake/cortex_m4.cmake",
+        "thumbv7em-none-eabi" => "cmake/arm-gcc-cortex-m4.cmake",
+        "thumbv7em-none-eabihf" => "cmake/arm-gcc-cortex-m4.cmake",
         "thumbv8m.base-none-eabi" => "cmake/cortex_m23.cmake",
         "x86_64-unknown-linux-gnu" => "cmake/linux/gnu/CMakeLists.txt",
         _ => {
@@ -96,7 +93,7 @@ fn main() {
         }
     };
 
-    // Build threadx
+    // Build netx
     let mut cfg = Config::new(src_path.to_owned());
 
     cfg.define("CMAKE_TOOLCHAIN_FILE", toolchain_file)
@@ -112,7 +109,7 @@ fn main() {
         cfg.define("NX_USER_FILE", nx_user_file_path.unwrap().to_str().unwrap());
     };
 
-    let dst = cfg.build().join("build");
+    let dst = cfg.build().join("build/netxduo");
 
     println!(
         "cargo:info=netx build completed and output at {}",
@@ -121,8 +118,8 @@ fn main() {
 
     println!("cargo:rustc-link-search=native={}", dst.display());
     println!("cargo:rustc-link-lib=static=netxduo");
+    
     println!("cargo:rustc-link-search={}", wiced_src.display());
-
     println!("cargo:rustc-link-lib=static=wiced_sdk_bin");
 
     // Parse the build_commands.txt file to find the include directories and other compiler flags
@@ -160,10 +157,11 @@ fn main() {
     defines.sort();
     defines.dedup();
 
-    let threadx_api_path = wiced_src.join("wiced_sdk.h");
+    // Here we generate not only the netx part but also include wiced. This does not seem to be correct.
+    let wiced_sdk_path = wiced_src.join("wiced_sdk.h");
     let bindings_path = out_dir.join("generated.rs");
     let mut bindings = bindgen::Builder::default()
-        .header(threadx_api_path.to_str().unwrap())
+        .header(wiced_sdk_path.to_str().unwrap())
         .use_core()
         .layout_tests(false)
         .allowlist_function("(_nx|wwd|wiced).*")
@@ -224,8 +222,8 @@ fn main() {
 
     bindings = bindings.clang_arg(format!(
         "-I{}",
-        "/Users/janjongen/Documents/workspace/netxduo/threadx/common/inc"
-    ));
+        src_path.join("threadx/common/inc").display()
+    )); 
 
     let bindings = bindings.generate().expect("Unable to generate bindings");
 

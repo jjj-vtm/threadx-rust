@@ -18,7 +18,7 @@
 
 //#define NX_DISABLE_FRAGMENTATION
 //#define NX_DISABLE_PACKET_CHAIN
-#define NX_LITTLE_ENDIAN
+//#define NX_LITTLE_ENDIAN
 #define NX_SECURE_ENABLE
 #define NX_ENABLE_EXTENDED_NOTIFY_SUPPORT
 #define NX_ENABLE_IP_PACKET_FILTER
@@ -28,7 +28,7 @@
 #define NX_SNTP_CLIENT_MIN_SERVER_STRATUM 3
 #define NX_DISABLE_ERROR_CHECKING
 
-#define NX_RAND                         nx_rand16
+//#define NX_RAND                         nx_rand16
 
 #define NX_ASSERT_FAIL for(;;){}
 
