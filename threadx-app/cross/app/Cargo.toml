@@ -32,8 +32,7 @@ stm32f4xx-hal = {workspace = true, version = "0.10.0", features = ["stm32f412"]}
 embedded-nal = "0.9.0"
 static_cell = "2.1.0"
 heapless = "0.8.0"
-minimq =  {path = "/Users/janjongen/Documents/workspace/minimq"}
-
+minimq = "0.10.0"
 
 # Non workspace application specific dependencies start here
 ## smoltcp = { version = "0.10.0", default-features = false, features = ["log","proto-ipv4"] }
