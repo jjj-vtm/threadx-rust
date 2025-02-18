@@ -1,28 +1,22 @@
-System preperation:
+## NetX rust integration
 
-- Rust embedded setup (probe-rs, arm target)
+This takes the build process and most of the structures from https://github.com/sabaton-systems/threadx-rust/ and builds a threadX + netX variant. 
+Compared to the original we did:
 
-In netx-sys build.rs
-- Adapt source path to point to netx 
+- Fix some UB
+- Generate netX bindings
+- Implement simple async executor based on https://github.com/zesterer/pollster
+- Implement embedded-nal interface for netX/Wiced Wifi
 
-- Adapt path to the default NX_USER_FILE 
+## Quickstart
 
-Replace all local paths in the thread-sys/build.rs
+Switch to the netx-fork branch via `git switch netx-fork` and do a `git pull`. In the `network.rs` example adapt the SSID, WLAN-Passwort and the MQTT settings accordingly.  
 
-For minimq checkout ... and place it locally since it needs to reference embedded NAL 0.9 and the official version only references 0.8
+Goto `threadx-app/cross/app` and run: 
 
-Build and run example app 
-
-
-Goto threadx-app/cross/app and run: 
-
-cargo run --release --target thumbv7em-none-eabihf --bin network
+`cargo run --release --target thumbv7em-none-eabihf --bin network`
 
 # Things to be adressed
-
-## Build
-
-Build should be self contained!
 
 ## Shortcomings
 
