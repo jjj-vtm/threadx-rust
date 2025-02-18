@@ -16,11 +16,7 @@ fn main() {
     let wiced_src = netx_manifest.join("../wiced-sys/src");
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is not set"));
     let nx_user_file = env::var("NX_USER_FILE").ok();
-    /* Layout
-     * 	https://github.com/eclipse-threadx/netxduo.git
-     *  with a submodule
-     *  485a02faec6edccef14812ddce6844af1d7d2eef threadx (v6.0_rel-177-g485a02fa)
-     */
+
     let src_path = netx_manifest.join("shared");
 
     let nx_user_file_path = if let Some(nx_user_file) = nx_user_file {

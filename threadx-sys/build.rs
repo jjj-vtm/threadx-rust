@@ -14,12 +14,10 @@ fn main() {
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is not set"));
     let tx_user_file = env::var("TX_USER_FILE").ok();
-
-    // TODO: Checkout ThreadX and build from there
-    let src_path = "/Users/janjongen/Documents/workspace/threadx"; // source code of threadx is vendored here
-    let threadx_gh = "https://github.com/eclipse-threadx/threadx.git";
-    let threadx_tag = "v6.4.1_rel";
-    println!("Using out_dir: {}", out_dir.display());
+    let threadx_mfst = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    // We use the git submodule inside netx to build threadx.  
+    let src_path = threadx_mfst.join("../netx-sys/shared/threadx"); // source code of threadx is vendored here
+   println!("Using out_dir: {}", out_dir.display());
     let tx_user_file_path = 
     if let Some(tx_user_file) = tx_user_file {
         let tx_user_file = PathBuf::from(tx_user_file).canonicalize().expect("Unable to find TX_USER_FILE");
@@ -31,23 +29,6 @@ fn main() {
         None
     };
     
-    // Clone threadx
-    std::process::Command::new("git")
-        .arg("clone")
-        .arg(threadx_gh)
-        .current_dir(out_dir.clone())
-        .output()
-    .expect("Failed to fetch git submodules!");
-
-    // checkout tag
-    std::process::Command::new("git")
-        .arg("checkout")
-        .arg(threadx_tag)
-        .current_dir(src_path.clone())
-        .output()
-        .expect("Unable to checkout threadx ta");
-
-
     let target = env::var("TARGET").expect("TARGET is not set");
 
     /*
@@ -147,7 +128,8 @@ fn main() {
     defines.sort();
     defines.dedup();
 
-    let threadx_api_path = src_path.to_owned() + "/common/inc/tx_api.h";
+    let binding = src_path.join("common/inc/tx_api.h").canonicalize().unwrap();
+    let threadx_api_path = binding.to_str().unwrap();
     let bindings_path = out_dir.join("generated.rs");
     let mut bindings = bindgen::Builder::default()
         .header(threadx_api_path)
