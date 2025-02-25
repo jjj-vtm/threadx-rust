@@ -12,11 +12,13 @@ Compared to the original we did:
 
 Switch to the netx-fork branch via `git switch netx-fork` and do a `git pull`. In the `network.rs` example adapt the SSID, WLAN-Passwort and the MQTT settings accordingly.  
 
-Goto `threadx-app/cross/app` and run: 
+Goto `threadx-app/cross/app` and run:
 
 `cargo run --release --target thumbv7em-none-eabihf --bin network`
 
 # Things to be adressed
+
+Only supports the MXAZ3166 board!
 
 ## Shortcomings
 

@@ -24,6 +24,7 @@ use crate::tx_checked_call;
 use super::error::TxError;
 use super::WaitOption;
 use defmt::error;
+use defmt::println;
 use num_traits::FromPrimitive;
 use thiserror_no_std::Error;
 use threadx_sys::_tx_mutex_create;
@@ -31,14 +32,15 @@ use threadx_sys::_tx_mutex_delete;
 use threadx_sys::_tx_mutex_get;
 use threadx_sys::_tx_mutex_put;
 use threadx_sys::TX_MUTEX;
+use threadx_sys::TX_MUTEX_STRUCT;
 
-/// Safety: TODO: Is it safe to copy the TX_MUTEX structure? Currently nothing forbids rust to just move it ie. memcopy it. 
-/// Maybe initialization of the mutex should return a handle containing the pointer. This should be safe and the can live as long as the mutex. 
+/// Safety: TODO: Is it safe to copy the TX_MUTEX structure? Currently nothing forbids rust to just move it ie. memcopy it.
+/// Maybe initialization of the mutex should return a handle containing the pointer. This should be safe and the can live as long as the mutex.
 /// But that maybe not enough since the original mutex struct can still be moved around...
 /// ThreadX documentation:
 /// Mutex Control Block TX_MUTEX
-/// The characteristics of each mutex are found in its control block. It contains information such as the current mutex ownership count along with the pointer 
-/// of the thread that owns the mutex. This structure is defined in the tx_api.h file. Mutex control blocks can be located anywhere in memory, but 
+/// The characteristics of each mutex are found in its control block. It contains information such as the current mutex ownership count along with the pointer
+/// of the thread that owns the mutex. This structure is defined in the tx_api.h file. Mutex control blocks can be located anywhere in memory, but
 /// it is most common to make the control block a global structure by defining it outside the scope of any function.
 pub struct Mutex<T> {
     inner: UnsafeCell<T>,
@@ -46,10 +48,17 @@ pub struct Mutex<T> {
     mutex: UnsafeCell<MaybeUninit<TX_MUTEX>>,
     initialized: bool,
 }
-
 /// Safety: Initialization is done via a &mut reference hence thread safe
 unsafe impl<T: Send> Send for Mutex<T> {}
 unsafe impl<T: Send> Sync for Mutex<T> {}
+pub struct StaticMutex<T> {
+    inner: UnsafeCell<T>,
+    mutex: UnsafeCell<&'static mut TX_MUTEX>,
+}
+
+/// Safety: Initialization is done via a &mut reference hence thread safe
+unsafe impl<T: Send> Send for StaticMutex<T> {}
+unsafe impl<T: Send> Sync for StaticMutex<T> {}
 
 pub struct MutexGuard<'a, T> {
     mutex: &'a Mutex<T>,
@@ -81,11 +90,67 @@ impl<T> Drop for MutexGuard<'_, T> {
         }
     }
 }
+pub struct MutexGuardStatic<'a, T> {
+    mutex: &'a StaticMutex<T>,
+}
+
+impl<T> Deref for MutexGuardStatic<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        unsafe { &*self.mutex.inner.get() }
+    }
+}
+
+impl<T> DerefMut for MutexGuardStatic<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        unsafe { &mut *self.mutex.inner.get() }
+    }
+}
+
+impl<T> Drop for MutexGuardStatic<'_, T> {
+    fn drop(&mut self) {
+        let mutex_ptr = self.mutex.mutex.get() as *mut TX_MUTEX_STRUCT;
+        if tx_checked_call!(_tx_mutex_put(mutex_ptr)).is_err() {
+            error!("MutexGuard::drop failed to put mutex");
+        };
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum MutexError {
     MutexError(TxError),
     PoisonError,
+}
+
+impl<T> StaticMutex<T> {
+    pub const fn new(inner: T, mutex: &'static mut TX_MUTEX) -> StaticMutex<T> {
+        StaticMutex {
+            inner: UnsafeCell::new(inner),
+            mutex: UnsafeCell::new(mutex),
+        }
+    }
+    pub fn initialize(& mut self, name: &CStr, inherit: bool) -> Result<(), TxError> {
+        let mptr = unsafe { self.mutex.get().as_mut().unwrap() };
+        let mutex_ptr = *mptr as *mut TX_MUTEX_STRUCT;
+        println!("Mutex initialized!");
+        let res = tx_checked_call!(_tx_mutex_create(
+            mutex_ptr,
+            name.as_ptr() as *mut i8,
+            inherit as u32
+        ));
+        println!("Static mutex initialized at {}", mutex_ptr);
+        res
+    }
+    pub fn lock(& self, wait_option: WaitOption) -> Result<MutexGuardStatic<'_, T>, MutexError> {
+        let mptr = unsafe { self.mutex.get().as_mut().unwrap() };
+        let mutex_ptr = *mptr as *mut TX_MUTEX_STRUCT;
+        let result = tx_checked_call!(_tx_mutex_get(mutex_ptr, wait_option as u32));
+        match result {
+            Ok(_) => Ok(MutexGuardStatic { mutex: self }),
+            Err(e) => Err(MutexError::MutexError(e)),
+        }
+    }
 }
 
 impl<T> Mutex<T> {
@@ -138,7 +203,16 @@ impl<T> Drop for Mutex<T> {
             // Nothing to drop, we rely on rusts recursive drop
             return;
         }
+        println!("Mutex got dropped");
         let mutex_ptr = self.mutex.get_mut().as_mut_ptr();
+        let _ = tx_checked_call!(_tx_mutex_delete(mutex_ptr));
+    }
+}
+impl<T> Drop for StaticMutex<T> {
+    fn drop(&mut self) {
+        let mptr = unsafe { self.mutex.get().as_mut().unwrap() };
+        let mutex_ptr = *mptr as *mut TX_MUTEX_STRUCT;        
+        println!("Static mutex dropped at {}", mutex_ptr);
         let _ = tx_checked_call!(_tx_mutex_delete(mutex_ptr));
     }
 }

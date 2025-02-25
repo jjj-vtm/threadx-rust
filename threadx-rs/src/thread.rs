@@ -72,7 +72,6 @@ impl Thread {
 
         //convert to a ULONG
         let entry_function_addr = expiration_function_ptr.expose_provenance() as ULONG;
-
         // Check that strlen < 31
         let mut local_name = [0u8; 32];
         local_name[..name.len()].copy_from_slice(name.as_bytes());

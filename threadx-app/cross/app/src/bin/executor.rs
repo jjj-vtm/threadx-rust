@@ -53,7 +53,7 @@ fn main() -> ! {
                 .unwrap();
 
             //allocate memory for the two tasks.
-            let task2_mem = bp.allocate(512, true).unwrap();
+            let task2_mem = bp.allocate(1024, true).unwrap();
 
             let heap: Aligned<[u8; 1024]> = Aligned([0; 1024]);
             let heap_mem = HEAP.init_with(|| heap.0);
@@ -64,9 +64,11 @@ fn main() -> ! {
                 .initialize(CStr::from_bytes_with_nul(b"ExecutorGroup\0").unwrap())
                 .unwrap();
 
-            let thread2_fn = Box::new(move || loop {
-                block_on(NeverFinished {}, event_handle);
-                let _ = sleep(Duration::from_secs(1));
+            let thread2_fn = Box::new(move ||  {
+                //block_on(NeverFinished {}, event_handle);
+                block_on(test_async(), event_handle);
+                println!("Short after...");
+                let _ = sleep(Duration::from_secs(5));
             });
 
             let thread2 = THREAD2.init(Thread::new());
@@ -84,6 +86,9 @@ fn main() -> ! {
     threadx_app::exit()
 }
 
+async fn test_async() {
+    println!("Hello from async runtime");
+}
 struct NeverFinished {}
 
 impl Future for NeverFinished {
@@ -91,7 +96,6 @@ impl Future for NeverFinished {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let w1 = cx.waker().clone();
-        let w2 = cx.waker().clone();
         Poll::Pending
     }
 }

@@ -26,20 +26,20 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 */
 
-
 use core::{
     ffi::CStr,
     future::{Future, IntoFuture},
+    mem::MaybeUninit,
+    sync::atomic::AtomicBool,
     task::{Context, Poll, Waker},
 };
 
-use crate::WaitOption::WaitForever;
+use crate::{mutex::StaticMutex, WaitOption::WaitForever};
 use defmt::println;
+use static_cell::StaticCell;
+use threadx_sys::TX_MUTEX_STRUCT;
 
-use crate::{
-    event_flags::EventFlagsGroupHandle,
-    mutex::Mutex,
-};
+use crate::{event_flags::EventFlagsGroupHandle, mutex::Mutex};
 extern crate alloc;
 
 /*
@@ -54,21 +54,30 @@ enum SignalState {
 }
 
 struct Signal {
-    state: Mutex<SignalState>,
+    state: StaticMutex<SignalState>,
     event_flag_handle: EventFlagsGroupHandle,
 }
-// TODO: Does not work for more then one signal. Should work for 32 (number of event_flags)  
+static MUTEX_S: StaticCell<TX_MUTEX_STRUCT> = StaticCell::new();
+static MUTEX_INIT: AtomicBool = AtomicBool::new(false);
+// TODO: Does not work for more then one signal. Should work for 32 (number of event_flags))
 impl Signal {
     fn new(event_flag_handle: EventFlagsGroupHandle) -> Self {
-        let mut mutex = Mutex::new(SignalState::Empty);
-        mutex.initialize(CStr::from_bytes_with_nul(b"SignalMutex\0").unwrap(), false).unwrap();
+       // if MUTEX_INIT.load(core::sync::atomic::Ordering::Acquire) {
+            let sm = MUTEX_S.init(unsafe { MaybeUninit::zeroed().assume_init() });
+            println!("TX_Struct@ {}", sm as *mut TX_MUTEX_STRUCT);
+            let mut m = StaticMutex::new(SignalState::Empty, sm);
+            m.initialize(CStr::from_bytes_with_nul(b"TestMutex\0").unwrap(), false)
+                .unwrap();
+       // }
+        // let mut mutex = Mutex::new(SignalState::Empty);
+        //mutex.initialize(CStr::from_bytes_with_nul(b"SignalMutex\0").unwrap(), false).unwrap();
         Self {
-            state: mutex,
+            state: m,
             event_flag_handle: event_flag_handle,
         }
     }
 
-    fn wait(& self) {
+    fn wait(&self) {
         let mut state = self.state.lock(WaitForever).unwrap();
         match *state {
             // Notify() was called before we got here, consume it here without waiting and return immediately.
@@ -84,7 +93,7 @@ impl Signal {
                 // accordingly and begin polling the condvar in a loop until it's no longer telling us to wait. The
                 // loop prevents incorrect spurious wakeups.
                 *state = SignalState::Waiting;
-                // Release the mutex. 
+                // Release the mutex.
                 drop(state);
                 // Wait for notification. TODO: What happens if we were preempted in between? Wait can only be called by
                 // the executor routine when the future was PENDING. What might happen is that between the Mutex drop and the
@@ -158,9 +167,7 @@ pub fn block_on<F: IntoFuture>(fut: F, event_flag_handle: EventFlagsGroupHandle)
     // Poll the future to completion
     loop {
         match fut.as_mut().poll(&mut context) {
-            Poll::Pending => {
-                signal.wait()
-            }
+            Poll::Pending => signal.wait(),
             Poll::Ready(item) => break item,
         }
     }

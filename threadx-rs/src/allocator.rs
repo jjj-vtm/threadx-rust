@@ -42,7 +42,7 @@ impl ThreadXAllocator {
     }
 
     pub fn initialize(&'static self, pool_memory: &'static mut [u8]) -> Result<(), TxError> {
-        // Panic if initialized twice. Check if name is not global (and not zero)
+        // TODO: Panic if initialized twice. Check if name is not global (and not zero)
         let res = tx_checked_call!(_tx_byte_pool_create(
             self.pool_ptr,
             tx_str!("global").as_ptr() as *mut i8,
@@ -51,37 +51,32 @@ impl ThreadXAllocator {
         ));
         // Set the allocator to initialized
         self.initialized
-            .fetch_or(true, core::sync::atomic::Ordering::Relaxed);
+            .store(true, core::sync::atomic::Ordering::Release);
         res
     }
 }
 
 unsafe impl GlobalAlloc for ThreadXAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if !self.initialized.load(core::sync::atomic::Ordering::Relaxed) {
+        if !self.initialized.load(core::sync::atomic::Ordering::Acquire) {
             panic!("Use of ThreadX allocator before it was initialized");
         }
-        // ThreadX always returned memory blocks of multiple of sizeof(ULONG) = 4bytes (at least in our case)
-        // ThreadX comment:
-        // "Round the memory size up to the next size that is evenly divisible by
-        // an ALIGN_TYPE (this is typically a 32-bit ULONG).  This guarantees proper alignment" 
-        // TODO: Handle alignment
         let mut ptr: *mut c_void = core::ptr::null_mut() as *mut c_void;
+
+        // Calculate next size which is a multiple of the alignment
+        let size = layout.size() + ((layout.align() - layout.size()) % layout.align());
+
         // Safety: _tx_byte_allocate is thread safe so it is ok to use the pool_ptr ie. a pointer into the static mut struct
-        let res = tx_checked_call!(_tx_byte_allocate(
+        let mut res = tx_checked_call!(_tx_byte_allocate(
             self.pool_ptr,
             &mut ptr,
-            layout.size() as ULONG,
+            size as ULONG,
             TX_WAIT_FOREVER
         ))
         .map(|_| ptr as *mut u8)
         .unwrap();
-        // Sanity check
-        println!("Allocated pointer at {:x}", ptr.addr());
-        if ptr.addr() % layout.align() != 0 {
-            println!("Pointer not aligned to {:x} ... wtf", layout.align());
-        }
-        res
+        // Align the pointer
+        res.add(res.align_offset(layout.align()))
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
