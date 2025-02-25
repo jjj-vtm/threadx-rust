@@ -64,7 +64,7 @@ fn main() -> ! {
                 .initialize(CStr::from_bytes_with_nul(b"ExecutorGroup\0").unwrap())
                 .unwrap();
 
-            let thread2_fn = Box::new(move ||  {
+            let thread2_fn = Box::new(move ||  loop {
                 //block_on(NeverFinished {}, event_handle);
                 block_on(test_async(), event_handle);
                 println!("Short after...");

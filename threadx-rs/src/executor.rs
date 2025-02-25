@@ -57,22 +57,29 @@ struct Signal {
     state: StaticMutex<SignalState>,
     event_flag_handle: EventFlagsGroupHandle,
 }
-static MUTEX_S: StaticCell<TX_MUTEX_STRUCT> = StaticCell::new();
-static MUTEX_INIT: AtomicBool = AtomicBool::new(false);
+static mut MUTEX_S: TX_MUTEX_STRUCT = unsafe { MaybeUninit::zeroed().assume_init() };
+static SIGNAL_IN_USE: AtomicBool = AtomicBool::new(false);
 // TODO: Does not work for more then one signal. Should work for 32 (number of event_flags))
 impl Signal {
     fn new(event_flag_handle: EventFlagsGroupHandle) -> Self {
-       // if MUTEX_INIT.load(core::sync::atomic::Ordering::Acquire) {
-            let sm = MUTEX_S.init(unsafe { MaybeUninit::zeroed().assume_init() });
-            println!("TX_Struct@ {}", sm as *mut TX_MUTEX_STRUCT);
-            let mut m = StaticMutex::new(SignalState::Empty, sm);
+        let mm = if SIGNAL_IN_USE
+            .compare_exchange(
+                false,
+                true,
+                core::sync::atomic::Ordering::Acquire,
+                core::sync::atomic::Ordering::Relaxed,
+            )
+            .is_ok()
+        {
+            let mut m = StaticMutex::new(SignalState::Empty, unsafe { &mut MUTEX_S });
             m.initialize(CStr::from_bytes_with_nul(b"TestMutex\0").unwrap(), false)
                 .unwrap();
-       // }
-        // let mut mutex = Mutex::new(SignalState::Empty);
-        //mutex.initialize(CStr::from_bytes_with_nul(b"SignalMutex\0").unwrap(), false).unwrap();
+            m
+        } else {
+            panic!("Signal cannot be used twice");
+        };
         Self {
-            state: m,
+            state: mm,
             event_flag_handle: event_flag_handle,
         }
     }
@@ -165,10 +172,19 @@ pub fn block_on<F: IntoFuture>(fut: F, event_flag_handle: EventFlagsGroupHandle)
     let mut context = Context::from_waker(&waker);
 
     // Poll the future to completion
-    loop {
+    let item = loop {
         match fut.as_mut().poll(&mut context) {
             Poll::Pending => signal.wait(),
             Poll::Ready(item) => break item,
         }
-    }
+    };
+    // After the block_on is done we drop the mutex so we can reuse it.
+    // TODO: Check orderings, implement error cases
+    let _ = SIGNAL_IN_USE.compare_exchange(
+        true,
+        false,
+        core::sync::atomic::Ordering::Relaxed,
+        core::sync::atomic::Ordering::Relaxed,
+    );
+    item
 }

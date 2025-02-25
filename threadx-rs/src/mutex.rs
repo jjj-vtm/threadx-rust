@@ -130,21 +130,17 @@ impl<T> StaticMutex<T> {
             mutex: UnsafeCell::new(mutex),
         }
     }
-    pub fn initialize(& mut self, name: &CStr, inherit: bool) -> Result<(), TxError> {
-        let mptr = unsafe { self.mutex.get().as_mut().unwrap() };
-        let mutex_ptr = *mptr as *mut TX_MUTEX_STRUCT;
-        println!("Mutex initialized!");
+    pub fn initialize(&mut self, name: &CStr, inherit: bool) -> Result<(), TxError> {
+        let mutex_ptr = unsafe { self.mutex.get().read() };
         let res = tx_checked_call!(_tx_mutex_create(
             mutex_ptr,
             name.as_ptr() as *mut i8,
             inherit as u32
         ));
-        println!("Static mutex initialized at {}", mutex_ptr);
         res
     }
-    pub fn lock(& self, wait_option: WaitOption) -> Result<MutexGuardStatic<'_, T>, MutexError> {
-        let mptr = unsafe { self.mutex.get().as_mut().unwrap() };
-        let mutex_ptr = *mptr as *mut TX_MUTEX_STRUCT;
+    pub fn lock(&self, wait_option: WaitOption) -> Result<MutexGuardStatic<'_, T>, MutexError> {
+        let mutex_ptr = unsafe { self.mutex.get().read() };
         let result = tx_checked_call!(_tx_mutex_get(mutex_ptr, wait_option as u32));
         match result {
             Ok(_) => Ok(MutexGuardStatic { mutex: self }),
@@ -152,7 +148,15 @@ impl<T> StaticMutex<T> {
         }
     }
 }
+impl<T> Drop for StaticMutex<T> {
+    fn drop(&mut self) {
+        let mutex_ptr = unsafe { self.mutex.get().read() };
 
+        println!("Static mutex dropped at {}", mutex_ptr as *mut TX_MUTEX);
+        let _ = tx_checked_call!(_tx_mutex_delete(mutex_ptr));
+    }
+}
+// Mutex implementation
 impl<T> Mutex<T> {
     pub const fn new(inner: T) -> Mutex<T> {
         Mutex {
@@ -203,16 +207,7 @@ impl<T> Drop for Mutex<T> {
             // Nothing to drop, we rely on rusts recursive drop
             return;
         }
-        println!("Mutex got dropped");
         let mutex_ptr = self.mutex.get_mut().as_mut_ptr();
-        let _ = tx_checked_call!(_tx_mutex_delete(mutex_ptr));
-    }
-}
-impl<T> Drop for StaticMutex<T> {
-    fn drop(&mut self) {
-        let mptr = unsafe { self.mutex.get().as_mut().unwrap() };
-        let mutex_ptr = *mptr as *mut TX_MUTEX_STRUCT;        
-        println!("Static mutex dropped at {}", mutex_ptr);
         let _ = tx_checked_call!(_tx_mutex_delete(mutex_ptr));
     }
 }
