@@ -9,7 +9,7 @@ use core::task::{Context, Poll};
 use core::time::Duration;
 
 use alloc::boxed::Box;
-use board::{BoardMxAz3166, LowLevelInit};
+use board::{BoardMxAz3166, I2CBus, LowLevelInit};
 
 use cortex_m::interrupt::{self, Mutex};
 use cortex_m::itm::Aligned;
@@ -44,7 +44,7 @@ static BP_MEM: StaticCell<[u8; 2048]> = StaticCell::new();
 static HEAP: StaticCell<[u8; 1024]> = StaticCell::new();
 static EXECUTOR_EVENT: StaticCell<EventFlagsGroup> = StaticCell::new();
 
-static BOARD: Mutex<RefCell<Option<BoardMxAz3166<I2c<I2C1>>>>> = Mutex::new(RefCell::new(None));
+static BOARD: Mutex<RefCell<Option<BoardMxAz3166<I2CBus>>>> = Mutex::new(RefCell::new(None));
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -85,7 +85,7 @@ fn main() -> ! {
                     .build();
                 //block_on(NeverFinished {}, event_handle);
                 block_on(test_async(), event_handle);
-                println!("Short after...");
+
                 interrupt::free(|cs| {
                     let mut tmp = BOARD.borrow(cs).borrow_mut();
                     let board = tmp.as_mut().unwrap();

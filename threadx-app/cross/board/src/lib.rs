@@ -23,7 +23,7 @@ use ssd1306::{
 pub trait LowLevelInit {
     /// The input is the number of ticks per second that ThreadX will be
     /// expecting. The output is an initialized Board struct
-    fn low_level_init(ticks_per_second: u32) -> Result<BoardMxAz3166<I2c<I2C1>>, ()>;
+    fn low_level_init(ticks_per_second: u32) -> Result<BoardMxAz3166<I2CBus>, ()>;
 }
 
 // cortexm-rt crate defines the _stack_start function. Due to the action of flip-link, the stack pointer
@@ -44,13 +44,36 @@ where
     I2C: embedded_hal::i2c::I2c,
 {
     pub display: DisplayType<I2C>,
-    // pub temp_sensor: TempSensorType<&'bus mut I2C>,
+    pub temp_sensor: TempSensorType<I2CBus>,
+}
+
+pub struct I2CBus {
+    pub i2c: &'static Mutex<RefCell<Option<I2c<I2C1>>>>,
+}
+impl embedded_hal::i2c::ErrorType for I2CBus
+{
+    type Error = stm32f4xx_hal::i2c::Error;
+}
+
+impl embedded_hal::i2c::I2c for I2CBus
+{
+    fn transaction(
+        &mut self,
+        address: u8,
+        operations: &mut [embedded_hal::i2c::Operation<'_>],
+    ) -> Result<(), Self::Error> {
+        interrupt::free(|cs| {
+            let mut binding = self.i2c.borrow(cs).borrow_mut();
+            let mut bus = binding.as_mut().unwrap();
+            bus.transaction_slice(address, operations)
+        })
+    }
 }
 
 static SHARED_BUS: Mutex<RefCell<Option<I2c<I2C1>>>> = Mutex::new(RefCell::new(None));
 
-impl LowLevelInit for BoardMxAz3166<I2c<I2C1>> {
-    fn low_level_init(ticks_per_second: u32) -> Result<BoardMxAz3166<I2c<I2C1>>, ()> {
+impl LowLevelInit for BoardMxAz3166<I2CBus> {
+    fn low_level_init(ticks_per_second: u32) -> Result<BoardMxAz3166<I2CBus>, ()> {
         unsafe {
             let stack_start = &_stack_start as *const u32 as u32;
             threadx_sys::_tx_thread_system_stack_ptr = stack_start as *mut c_void;
@@ -95,22 +118,20 @@ impl LowLevelInit for BoardMxAz3166<I2c<I2C1>> {
         let sda = gpiob.pb9;
 
         let i2c = I2c::new(p.I2C1, (scl, sda), Mode::standard(Hertz::kHz(400)), &clocks);
-       //interrupt::free(|cs| SHARED_BUS.borrow(cs).replace(Some(i2c)));
+        interrupt::free(|cs| SHARED_BUS.borrow(cs).replace(Some(i2c)));
+        let mut bus = I2CBus {
+            i2c: &SHARED_BUS,
+        };
         defmt::println!("Low level init");
- /* 
-        let hts221 = interrupt::free(|cs| {
-            let proxy1 = SHARED_BUS.borrow(cs).get_mut().as_mut().unwrap();
+        
+        let hts221 =
             hts221::Builder::new()
                 .with_data_rate(hts221::DataRate::Continuous1Hz)
-                .build(&mut proxy1)
-                .unwrap()
-        });
-        
-         let interface = interrupt::free(|cs| {
-            I2CDisplayInterface::new(SHARED_BUS.borrow(cs).get_mut().as_mut().unwrap())
-        }); */ 
-        let interface = I2CDisplayInterface::new(i2c);
+                .build(&mut bus)
+                .unwrap();
 
+
+        let interface = I2CDisplayInterface::new(bus);
 
         let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
             .into_buffered_graphics_mode();
@@ -131,7 +152,7 @@ impl LowLevelInit for BoardMxAz3166<I2c<I2C1>> {
         defmt::println!("Int prio set");
         Ok(BoardMxAz3166 {
             display: display,
-         //   temp_sensor: hts221,
+            temp_sensor: hts221,
         })
     }
 }
