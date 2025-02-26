@@ -76,7 +76,7 @@ impl Signal {
                 .unwrap();
             m
         } else {
-            panic!("Signal cannot be used twice");
+            panic!("Parallel execution on different threads is not supported at the moment.");
         };
         Self {
             state: mm,
