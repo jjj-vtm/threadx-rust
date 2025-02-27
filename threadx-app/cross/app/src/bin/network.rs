@@ -16,6 +16,7 @@ use defmt::println;
 use minimq::broker::IpBroker;
 use minimq::embedded_time::rate::Fraction;
 use minimq::embedded_time::{self, Clock, Instant};
+use minimq::publication::ToPayload;
 use minimq::{ConfigBuilder, Minimq, Publication};
 use netx_sys::ULONG;
 use static_cell::StaticCell;
@@ -37,6 +38,18 @@ pub type UINT = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 pub enum Event {
     TemperatureMeasurement(i16),
+}
+
+impl ToPayload for Event {
+    type Error = ();
+
+    fn serialize(self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
+        let measure = match self {
+            Event::TemperatureMeasurement(m) => m,
+        };
+
+        todo!()
+    }
 }
 
 pub enum FlagEvents {
@@ -111,7 +124,7 @@ fn main() -> ! {
             let _ = wifi_thread
                 .initialize_with_autostart_box(
                     "wifi_thread",
-                    Box::new(move || do_network(&receiver, evt_handle)),
+                    Box::new(move || do_network(receiver, evt_handle)),
                     wifi_thread_stack,
                     4,
                     4,
@@ -125,7 +138,7 @@ fn main() -> ! {
             let _ = measure_thread
                 .initialize_with_autostart_box(
                     "measurement_thread",
-                    Box::new(move || do_measurement(&sender, evt_handle, hts211, i2c)),
+                    Box::new(move || do_measurement(sender, evt_handle, hts211, i2c)),
                     measure_thread_stack,
                     4,
                     4,
@@ -141,17 +154,11 @@ fn main() -> ! {
 }
 
 fn do_measurement(
-    snd: &QueueSender<Event>,
+    snd: QueueSender<Event>,
     evt_handle: EventFlagsGroupHandle,
     mut hts221: hts221::HTS221<I2CBus, stm32f4xx_hal::i2c::Error>,
     mut i2c: I2CBus,
 ) {
-    /*
-     * - Only start measurements after Wifi and MQTT is connected.
-     * - Implement via event_handle
-     * - Run measurement every 5 seconds
-     * - Publish data via Queue to network thread
-     */
     let _res = evt_handle
         .get(
             FlagEvents::WifiConnected as u32,
@@ -209,7 +216,7 @@ fn start_clock() -> impl Clock {
     ThreadXSecondClock {}
 }
 
-pub fn do_network(recv: &QueueReceiver<Event>, evt_handle: EventFlagsGroupHandle) {
+pub fn do_network(recv: QueueReceiver<Event>, evt_handle: EventFlagsGroupHandle) {
     defmt::println!("Initializing Network");
     let network = ThreadxTcpWifiNetwork::initialize("SSID", "PW").unwrap();
     defmt::println!("Network initialized");
@@ -240,12 +247,14 @@ pub fn do_network(recv: &QueueReceiver<Event>, evt_handle: EventFlagsGroupHandle
             _ => panic!("Error during poll, giving up."),
         }
         if mqtt_client.client().is_connected() {
-            let _ = mqtt_client
-                .client()
-                .publish(Publication::new("/cellar/temperature", "1.25"));
-        }
+            if let Ok(evt) = recv.receive(NoWait) {
+                let _ = mqtt_client
+                    .client()
+                    .publish(Publication::new("/cellar/temperature", evt));
+            }
 
-        // Poll every 500ms
-        let _ = thread::sleep(Duration::from_millis(500)).unwrap();
+            // Poll every 500ms
+            let _ = thread::sleep(Duration::from_millis(500)).unwrap();
+        }
     }
 }
