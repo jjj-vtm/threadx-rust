@@ -13,6 +13,9 @@ use stm32f4xx_hal::{
     rcc::RccExt,
 };
 
+pub use hts221;
+pub use embedded_hal::i2c;
+
 use ssd1306::{
     mode::DisplayConfig, prelude::DisplayRotation, size::DisplaySize128x64, I2CDisplayInterface,
     Ssd1306,
@@ -43,8 +46,8 @@ where
     I2C: embedded_hal::i2c::I2c,
 {
     pub display: Option<DisplayType<I2C>>,
-    pub temp_sensor: TempSensorType<I2CBus>,
-    pub i2c_bus: I2CBus,
+    pub temp_sensor: Option<TempSensorType<I2CBus>>,
+    pub i2c_bus: Option<I2CBus>,
 }
 
 #[derive(Clone, Copy)]
@@ -153,8 +156,8 @@ impl LowLevelInit for BoardMxAz3166<I2CBus> {
         defmt::println!("Int prio set");
         Ok(BoardMxAz3166 {
             display: Some(display),
-            temp_sensor: hts221,
-            i2c_bus: bus,
+            temp_sensor: Some(hts221),
+            i2c_bus: Some(bus),
         })
     }
 }

@@ -57,7 +57,7 @@ fn main() -> ! {
             let queue = QUEUE.init(Queue::new());
             let (sender, receiver) = queue
                 .initialize(
-                    CStr::from_bytes_with_nul(b"queue\0").unwrap(),
+                    c"queue",
                     queue_mem.consume(),
                 )
                 .unwrap();

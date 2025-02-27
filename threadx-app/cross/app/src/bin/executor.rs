@@ -97,8 +97,8 @@ fn main() -> ! {
                     interrupt::free(|cs| {
                         let mut binding = BOARD.borrow(cs).borrow_mut();
                         let board = binding.as_mut().unwrap();
-                        let hts221 = &mut board.temp_sensor;
-                        let deg = hts221.temperature_x8(&mut board.i2c_bus).unwrap() as f32 / 8.0;
+                        let hts221 = board.temp_sensor.as_mut().unwrap();
+                        let deg = hts221.temperature_x8(&mut board.i2c_bus.unwrap()).unwrap() as f32 / 8.0;
                         println!("Current temperature: {}", deg);
                     });
                     let _ = sleep(Duration::from_secs(5));
