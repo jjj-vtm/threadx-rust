@@ -2,7 +2,6 @@
 #![no_std]
 
 use core::cell::RefCell;
-use core::ffi::CStr;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
@@ -21,8 +20,6 @@ use embedded_graphics::{
     text::{Baseline, Text},
 };
 use static_cell::StaticCell;
-use stm32f4xx_hal::i2c::I2c;
-use stm32f4xx_hal::pac::I2C1;
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::EventFlagsGroup;
 use threadx_rs::executor::block_on;
@@ -52,6 +49,7 @@ fn main() -> ! {
         // low level initialization
         |ticks_per_second| {
             let board = BoardMxAz3166::low_level_init(ticks_per_second).unwrap();
+            // ThreadX mutexes cannot be used here.
             interrupt::free(|cs| BOARD.borrow(cs).borrow_mut().replace(board));
         },
         // Start of Application definition
@@ -63,7 +61,7 @@ fn main() -> ! {
             // Inefficient, creates array on the stack first.
             let bp_mem = BP_MEM.init_with(|| [0u8; 2048]);
             let bp = bp
-                .initialize(CStr::from_bytes_until_nul(b"pool1\0").unwrap(), bp_mem)
+                .initialize(c"pool1", bp_mem)
                 .unwrap();
 
             //allocate memory for the two tasks.
@@ -75,28 +73,36 @@ fn main() -> ! {
 
             let evt = EXECUTOR_EVENT.init(EventFlagsGroup::new());
             let event_handle = evt
-                .initialize(CStr::from_bytes_with_nul(b"ExecutorGroup\0").unwrap())
+                .initialize(c"ExecutorGroup")
                 .unwrap();
 
-            let thread2_fn = Box::new(move || loop {
+            let thread2_fn = Box::new(move || {
+                // Get the display out out the board structure
+                let mut display = interrupt::free(|cs| {
+                    let mut board = BOARD.borrow(cs).borrow_mut();
+                    board.as_mut().unwrap().display.take().unwrap()
+                });
                 let text_style = MonoTextStyleBuilder::new()
                     .font(&FONT_6X10)
                     .text_color(BinaryColor::On)
                     .build();
                 //block_on(NeverFinished {}, event_handle);
                 block_on(test_async(), event_handle);
+                Text::with_baseline("Test", Point::zero(), text_style, Baseline::Top)
+                    .draw(&mut display)
+                    .unwrap();
 
-                interrupt::free(|cs| {
-                    let mut tmp = BOARD.borrow(cs).borrow_mut();
-                    let board = tmp.as_mut().unwrap();
-                    let display = &mut board.display;
-                    Text::with_baseline("Test", Point::zero(), text_style, Baseline::Top)
-                        .draw(display)
-                        .unwrap();
-
-                    display.flush().unwrap();
-                });
-                let _ = sleep(Duration::from_secs(5));
+                        display.flush().unwrap();
+                loop {
+                    interrupt::free(|cs| {
+                        let mut binding = BOARD.borrow(cs).borrow_mut();
+                        let board = binding.as_mut().unwrap();
+                        let hts221 = &mut board.temp_sensor;
+                        let deg = hts221.temperature_x8(&mut board.i2c_bus).unwrap() as f32 / 8.0;
+                        println!("Current temperature: {}", deg);
+                    });
+                    let _ = sleep(Duration::from_secs(5));
+                }
             });
 
             let thread2 = THREAD2.init(Thread::new());

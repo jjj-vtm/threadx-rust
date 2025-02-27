@@ -3,7 +3,7 @@ use crate::{tx_checked_call, tx_str};
 use core::sync::atomic::AtomicBool;
 use core::{
     alloc::{GlobalAlloc, Layout},
-    ffi::{c_void, CStr},
+    ffi::c_void,
     mem::MaybeUninit,
 };
 use defmt::{error, println};

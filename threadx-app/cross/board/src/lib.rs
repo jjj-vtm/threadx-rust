@@ -1,5 +1,4 @@
 #![no_std]
-use core::cell::Ref;
 use core::ffi::c_void;
 use core::{arch::asm, cell::RefCell};
 
@@ -9,9 +8,9 @@ use ssd1306::prelude::I2CInterface;
 use stm32f4xx_hal::time::Hertz;
 use stm32f4xx_hal::{
     gpio::GpioExt,
-    i2c::{I2c, Instance, Mode},
-    pac::{self, I2C1, TIM5},
-    rcc::{Clocks, RccExt},
+    i2c::{I2c, Mode},
+    pac::{self, I2C1},
+    rcc::RccExt,
 };
 
 use ssd1306::{
@@ -43,10 +42,12 @@ pub struct BoardMxAz3166<I2C>
 where
     I2C: embedded_hal::i2c::I2c,
 {
-    pub display: DisplayType<I2C>,
+    pub display: Option<DisplayType<I2C>>,
     pub temp_sensor: TempSensorType<I2CBus>,
+    pub i2c_bus: I2CBus,
 }
 
+#[derive(Clone, Copy)]
 pub struct I2CBus {
     pub i2c: &'static Mutex<RefCell<Option<I2c<I2C1>>>>,
 }
@@ -64,7 +65,7 @@ impl embedded_hal::i2c::I2c for I2CBus
     ) -> Result<(), Self::Error> {
         interrupt::free(|cs| {
             let mut binding = self.i2c.borrow(cs).borrow_mut();
-            let mut bus = binding.as_mut().unwrap();
+            let bus = binding.as_mut().unwrap();
             bus.transaction_slice(address, operations)
         })
     }
@@ -131,7 +132,7 @@ impl LowLevelInit for BoardMxAz3166<I2CBus> {
                 .unwrap();
 
 
-        let interface = I2CDisplayInterface::new(bus);
+        let interface: I2CInterface<I2CBus> = I2CDisplayInterface::new(bus);
 
         let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
             .into_buffered_graphics_mode();
@@ -151,8 +152,9 @@ impl LowLevelInit for BoardMxAz3166<I2CBus> {
         }
         defmt::println!("Int prio set");
         Ok(BoardMxAz3166 {
-            display: display,
+            display: Some(display),
             temp_sensor: hts221,
+            i2c_bus: bus,
         })
     }
 }

@@ -27,7 +27,6 @@ DEALINGS IN THE SOFTWARE.
 */
 
 use core::{
-    ffi::CStr,
     future::{Future, IntoFuture},
     mem::MaybeUninit,
     sync::atomic::AtomicBool,
@@ -72,7 +71,7 @@ impl Signal {
             .is_ok()
         {
             let mut m = StaticMutex::new(SignalState::Empty, unsafe { &mut MUTEX_S });
-            m.initialize(CStr::from_bytes_with_nul(b"TestMutex\0").unwrap(), false)
+            m.initialize(c"TestMutex", false)
                 .unwrap();
             m
         } else {

@@ -1,7 +1,6 @@
 #![no_main]
 #![no_std]
 
-use core::ffi::CStr;
 
 use alloc::boxed::Box;
 use board::{BoardMxAz3166, LowLevelInit};
@@ -52,7 +51,7 @@ fn main() -> ! {
             let mem_tmp = [0u8; 1024];
             let bp_mem = BP_MEM.init(mem_tmp);
             let bp = bp
-                .initialize(CStr::from_bytes_until_nul(b"pool1\0").unwrap(), bp_mem)
+                .initialize(c"pool1", bp_mem)
                 .unwrap();
             //allocate memory for the two tasks.
             let task1_mem = bp.allocate(256, true).unwrap();
@@ -69,7 +68,7 @@ fn main() -> ! {
             let event_group = EVENT_GROUP.init(EventFlagsGroup::new());
 
             let evt_handle = event_group
-                .initialize(CStr::from_bytes_until_nul(b"event_flag\0").unwrap())
+                .initialize(c"event_flag")
                 .unwrap();
 
             // Create timer
@@ -83,7 +82,7 @@ fn main() -> ! {
 
             timer
                 .initialize_with_closure(
-                    CStr::from_bytes_until_nul(b"timer\0").unwrap(),
+                    c"timer",
                     timer_fn,
                     core::time::Duration::from_secs(5), // initial timeout is 5 seconds
                     core::time::Duration::from_secs(1), // periodic timeout is 1 second

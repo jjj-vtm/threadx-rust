@@ -1,14 +1,16 @@
 #![no_main]
 #![no_std]
 
+use core::cell::RefCell;
 use core::ffi::CStr;
 use core::net::{Ipv4Addr, SocketAddr};
 use core::sync::atomic::AtomicU32;
 use core::time::Duration;
 
 use alloc::boxed::Box;
-use board::{BoardMxAz3166, LowLevelInit};
+use board::{BoardMxAz3166, I2CBus, LowLevelInit};
 
+use cortex_m::interrupt;
 use cortex_m::itm::Aligned;
 use defmt::println;
 use minimq::broker::IpBroker;
@@ -36,26 +38,32 @@ static GLOBAL: ThreadXAllocator = ThreadXAllocator::new();
 static HEAP: StaticCell<[u8; 1024]> = StaticCell::new();
 
 // Wifi thread globals
-static WIFI_THREAD_STACK: StaticCell<[u8; 8192]> = StaticCell::new();
+static WIFI_THREAD_STACK: StaticCell<[u8; 4096]> = StaticCell::new();
 static WIFI_THREAD: StaticCell<Thread> = StaticCell::new();
+
+static MEASURE_THREAD_STACK: StaticCell<[u8; 1024]> = StaticCell::new();
+static MEASURE_THREAD: StaticCell<Thread> = StaticCell::new();
+
+static BOARD: cortex_m::interrupt::Mutex<RefCell<Option<BoardMxAz3166<I2CBus>>>> = cortex_m::interrupt::Mutex::new(RefCell::new(None));
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let tx = threadx_rs::Builder::new(
         |ticks_per_second| {
-            BoardMxAz3166::low_level_init(ticks_per_second).unwrap();
+            let board = BoardMxAz3166::low_level_init(ticks_per_second).unwrap();
+            // ThreadX mutexes cannot be used here.
+            interrupt::free(|cs| BOARD.borrow(cs).borrow_mut().replace(board));
         },
         |mem_start| {
             defmt::println!("Define application. Memory starts at: {} ", mem_start);
 
             let heap = Aligned([0; 1024]);
-            let heap_mem = HEAP.init_with(||heap.0);
+            let heap_mem = HEAP.init_with(|| heap.0);
 
             GLOBAL.initialize(heap_mem).unwrap();
 
             // Static Cell since we need an allocated but uninitialized block of memory
-            let wifi_thread_stack = WIFI_THREAD_STACK.init_with(|| [0u8; 8192]);
-
+            let wifi_thread_stack = WIFI_THREAD_STACK.init_with(|| [0u8; 4096]);
             let wifi_thread: &'static mut Thread = WIFI_THREAD.init(Thread::new());
 
             let _ = wifi_thread
@@ -68,12 +76,35 @@ fn main() -> ! {
                     0,
                 )
                 .unwrap();
+
+            let measure_thread_stack = MEASURE_THREAD_STACK.init_with(|| [0u8; 1024]);
+            let measure_thread: &'static mut Thread = MEASURE_THREAD.init(Thread::new());
+
+            let _ = measure_thread
+                .initialize_with_autostart(
+                    "measurement_thread",
+                    Box::new(do_measurement),
+                    measure_thread_stack,
+                    4,
+                    4,
+                    0,
+                )
+                .unwrap();
         },
     );
 
     tx.initialize();
     println!("Exit");
     threadx_app::exit()
+}
+
+fn do_measurement() {
+    /*
+     * - Only start measurements after Wifi and MQTT is connected.
+     * - Implement via event_handle
+     * - Run measurement every 5 seconds
+     * - Publish data via Queue to network thread
+     */
 }
 
 fn start_clock() -> impl Clock {
