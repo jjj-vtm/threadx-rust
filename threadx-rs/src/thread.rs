@@ -9,7 +9,7 @@ use crate::time::TxTicks;
 use crate::tx_checked_call;
 
 use super::error::TxError;
-use defmt::error;
+use defmt::{error, println};
 use num_traits::FromPrimitive;
 
 extern crate alloc;
@@ -52,8 +52,8 @@ where
 }
 
 unsafe extern "C" fn thread_box_callback_trampoline(arg: ULONG) {
-    let argc: *mut alloc::boxed::Box<dyn Fn()> = core::ptr::with_exposed_provenance_mut(arg as usize);
-    (*argc)();
+    let argc: *mut alloc::boxed::Box<dyn FnOnce()> = core::ptr::with_exposed_provenance_mut(arg as usize);
+    (argc.read())();
 }
 
 impl Thread {
@@ -69,7 +69,6 @@ impl Thread {
     ) -> Result<ThreadHandle, TxError> {
         let expiration_function_ptr =
             alloc::boxed::Box::into_raw(alloc::boxed::Box::new(entry_function));
-
         //convert to a ULONG
         let entry_function_addr = expiration_function_ptr.expose_provenance() as ULONG;
         // Check that strlen < 31

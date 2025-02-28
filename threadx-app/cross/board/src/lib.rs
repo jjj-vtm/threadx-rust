@@ -34,7 +34,7 @@ extern "C" {
     static _stack_start: u32;
 }
 
-type DisplayType<I2C> = Ssd1306<
+pub type DisplayType<I2C> = Ssd1306<
     ssd1306::prelude::I2CInterface<I2C>,
     DisplaySize128x64,
     ssd1306::mode::BufferedGraphicsMode<DisplaySize128x64>,

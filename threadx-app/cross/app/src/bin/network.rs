@@ -3,12 +3,13 @@
 
 use core::cell::RefCell;
 use core::ffi::CStr;
+use core::mem::MaybeUninit;
 use core::net::{Ipv4Addr, SocketAddr};
 use core::sync::atomic::AtomicU32;
 use core::time::Duration;
 
 use alloc::boxed::Box;
-use board::{hts221, BoardMxAz3166, I2CBus, LowLevelInit};
+use board::{hts221, BoardMxAz3166, DisplayType, I2CBus, LowLevelInit};
 
 use cortex_m::interrupt;
 use cortex_m::itm::Aligned;
@@ -25,19 +26,28 @@ use threadx_app::network::network::ThreadxTcpWifiNetwork;
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::GetOption::*;
 use threadx_rs::event_flags::{EventFlagsGroup, EventFlagsGroupHandle};
+use threadx_rs::mutex::{Mutex, StaticMutex};
 use threadx_rs::queue::{Queue, QueueReceiver, QueueSender};
 use threadx_rs::thread::{self, sleep};
 use threadx_rs::WaitOption::*;
 
 use threadx_rs::thread::Thread;
 use threadx_rs::timer::Timer;
+use threadx_sys::TX_MUTEX;
+
+use embedded_graphics::{
+    mono_font::{ascii::FONT_6X10, MonoTextStyleBuilder},
+    pixelcolor::BinaryColor,
+    prelude::*,
+    text::{Baseline, Text},
+};
 
 extern crate alloc;
 
 pub type UINT = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 pub enum Event {
-    TemperatureMeasurement(i16),
+    TemperatureMeasurement(i32),
 }
 
 impl ToPayload for Event {
@@ -47,8 +57,9 @@ impl ToPayload for Event {
         let measure = match self {
             Event::TemperatureMeasurement(m) => m,
         };
-
-        todo!()
+        let bytes = i32::to_ne_bytes(measure);
+        buffer[..size_of::<i32>()].copy_from_slice(&bytes);
+        Ok(size_of::<i32>())
     }
 }
 
@@ -76,6 +87,7 @@ static QUEUE: StaticCell<Queue<Event>> = StaticCell::new();
 static QUEUE_MEM: StaticCell<[u8; 128]> = StaticCell::new();
 
 static EVENT_GROUP: StaticCell<EventFlagsGroup> = StaticCell::new();
+static DISPLAY: StaticCell<Mutex<Option<DisplayType<I2CBus>>>> = StaticCell::new();
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -94,11 +106,17 @@ fn main() -> ! {
             GLOBAL.initialize(heap_mem).unwrap();
 
             // Get the peripherals
+            let display_ref = DISPLAY.init(Mutex::new(None));
+            let _ = display_ref.initialize(c"display_mtx", false).unwrap();
             let display = interrupt::free(|cs| {
                 let mut board = BOARD.borrow(cs).borrow_mut();
                 board.as_mut().unwrap().display.take().unwrap()
             });
-
+            {
+                // Temporary scope to hold the lock
+                let mut display_guard = display_ref.lock(WaitForever).unwrap();
+                display_guard.replace(display);
+            }
             let (hts211, i2c) = interrupt::free(|cs| {
                 let mut board = BOARD.borrow(cs).borrow_mut();
                 let board = board.as_mut().unwrap();
@@ -120,18 +138,17 @@ fn main() -> ! {
             // Static Cell since we need an allocated but uninitialized block of memory
             let wifi_thread_stack = WIFI_THREAD_STACK.init_with(|| [0u8; 4096]);
             let wifi_thread: &'static mut Thread = WIFI_THREAD.init(Thread::new());
-
             let _ = wifi_thread
                 .initialize_with_autostart_box(
                     "wifi_thread",
-                    Box::new(move || do_network(receiver, evt_handle)),
+                    Box::new(move || do_network(receiver, evt_handle, display_ref)),
                     wifi_thread_stack,
                     4,
                     4,
                     0,
                 )
                 .unwrap();
-
+            println!("WLAN thread started");
             let measure_thread_stack = MEASURE_THREAD_STACK.init_with(|| [0u8; 1024]);
             let measure_thread: &'static mut Thread = MEASURE_THREAD.init(Thread::new());
 
@@ -145,6 +162,8 @@ fn main() -> ! {
                     0,
                 )
                 .unwrap();
+            
+            println!("Measure thread started");
         },
     );
 
@@ -159,6 +178,7 @@ fn do_measurement(
     mut hts221: hts221::HTS221<I2CBus, stm32f4xx_hal::i2c::Error>,
     mut i2c: I2CBus,
 ) {
+    println!("Waiting ...");
     let _res = evt_handle
         .get(
             FlagEvents::WifiConnected as u32,
@@ -168,7 +188,7 @@ fn do_measurement(
         .unwrap();
     println!("WLAN connected, beginning to measure");
     loop {
-        let deg = hts221.temperature_x8(&mut i2c).unwrap();
+        let deg = hts221.temperature_x8(&mut i2c).unwrap() as i32;
         let _ = snd.send(Event::TemperatureMeasurement(deg), WaitForever);
         println!("Current temperature: {}", deg);
         let _ = sleep(Duration::from_secs(5));
@@ -216,10 +236,41 @@ fn start_clock() -> impl Clock {
     ThreadXSecondClock {}
 }
 
-pub fn do_network(recv: QueueReceiver<Event>, evt_handle: EventFlagsGroupHandle) {
+pub fn do_network(
+    recv: QueueReceiver<Event>,
+    evt_handle: EventFlagsGroupHandle,
+    display: &Mutex<Option<DisplayType<I2CBus>>>,
+) {
+    println!("Do network...");
+    let text_style = MonoTextStyleBuilder::new()
+        .font(&FONT_6X10)
+        .text_color(BinaryColor::On)
+        .build();
+    let mut display = display.lock(WaitForever).unwrap().take().unwrap();
+    Text::with_baseline(
+        "Connection to WLAN (...)",
+        Point::zero(),
+        text_style,
+        Baseline::Top,
+    )
+    .draw(&mut display)
+    .unwrap();
+
+    display.flush().unwrap();
     defmt::println!("Initializing Network");
     let network = ThreadxTcpWifiNetwork::initialize("SSID", "PW").unwrap();
     defmt::println!("Network initialized");
+
+    Text::with_baseline(
+        "Connected to WLAN (/)",
+        Point::zero(),
+        text_style,
+        Baseline::Top,
+    )
+    .draw(&mut display)
+    .unwrap();
+
+    display.flush().unwrap();
 
     let remote_addr = SocketAddr::new(core::net::IpAddr::V4(Ipv4Addr::new(192, 168, 2, 105)), 1883);
     let mut buffer = [0u8; 128];

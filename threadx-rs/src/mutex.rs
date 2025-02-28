@@ -42,6 +42,9 @@ use threadx_sys::TX_MUTEX_STRUCT;
 /// The characteristics of each mutex are found in its control block. It contains information such as the current mutex ownership count along with the pointer
 /// of the thread that owns the mutex. This structure is defined in the tx_api.h file. Mutex control blocks can be located anywhere in memory, but
 /// it is most common to make the control block a global structure by defining it outside the scope of any function.
+/// 
+/// Problem with the current implementations is that it is not possible to create a static mutex and work with it. Both structures need a &mut
+/// to initialize which you do not have with a static. One could use StaticCell and share the reference but that does not seem so nice.
 pub struct Mutex<T> {
     inner: UnsafeCell<T>,
     // TX_MUTEX control block
@@ -130,7 +133,7 @@ impl<T> StaticMutex<T> {
             mutex: UnsafeCell::new(mutex),
         }
     }
-    pub fn initialize(&mut self, name: &CStr, inherit: bool) -> Result<(), TxError> {
+    pub fn initialize(&self, name: &CStr, inherit: bool) -> Result<(), TxError> {
         let mutex_ptr = unsafe { self.mutex.get().read() };
         let res = tx_checked_call!(_tx_mutex_create(
             mutex_ptr,

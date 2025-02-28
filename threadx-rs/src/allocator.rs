@@ -67,7 +67,7 @@ unsafe impl GlobalAlloc for ThreadXAllocator {
         let size = layout.size() + ((layout.align() - layout.size()) % layout.align());
 
         // Safety: _tx_byte_allocate is thread safe so it is ok to use the pool_ptr ie. a pointer into the static mut struct
-        let mut res = tx_checked_call!(_tx_byte_allocate(
+        let res = tx_checked_call!(_tx_byte_allocate(
             self.pool_ptr,
             &mut ptr,
             size as ULONG,
@@ -76,6 +76,7 @@ unsafe impl GlobalAlloc for ThreadXAllocator {
         .map(|_| ptr as *mut u8)
         .unwrap();
         // Align the pointer
+        println!("Allocation of {}, with alignment {}", layout.size(), layout.align());
         res.add(res.align_offset(layout.align()))
     }
 
