@@ -150,8 +150,10 @@ fn main() -> ! {
                 )
                 .unwrap();
             println!("WLAN thread started");
+            
             let measure_thread_stack = MEASURE_THREAD_STACK.init_with(|| [0u8; 1024]);
             let measure_thread: &'static mut Thread = MEASURE_THREAD.init(Thread::new());
+
 
             let _ = measure_thread
                 .initialize_with_autostart_box(
@@ -163,7 +165,7 @@ fn main() -> ! {
                     0,
                 )
                 .unwrap();
-            
+
             println!("Measure thread started");
         },
     );
@@ -246,27 +248,19 @@ pub fn do_network(
         .text_color(BinaryColor::On)
         .build();
     let mut display = display.lock(WaitForever).unwrap().take().unwrap();
-    Text::with_baseline(
-        "Connecting...",
-        Point::zero(),
-        text_style,
-        Baseline::Top,
-    )
-    .draw(&mut display)
-    .unwrap();
+    Text::with_baseline("Connecting...", Point::zero(), text_style, Baseline::Top)
+        .draw(&mut display)
+        .unwrap();
 
     display.flush().unwrap();
     defmt::println!("Initializing Network");
-    let network = ThreadxTcpWifiNetwork::initialize("SSID", "PW");
+    let network = ThreadxTcpWifiNetwork::initialize("", "");
     if network.is_err() {
-        Text::with_baseline(
-            "Failure :(",
-            Point::zero(),
-            text_style,
-            Baseline::Top,
-        )
-        .draw(&mut display)
-        .unwrap();
+        display.clear_buffer();
+        Text::with_baseline("Failure :(", Point::zero(), text_style, Baseline::Top)
+            .draw(&mut display)
+            .unwrap();
+        display.flush().unwrap();
         panic!();
     }
     let network = network.unwrap();

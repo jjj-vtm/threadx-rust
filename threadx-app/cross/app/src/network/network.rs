@@ -184,7 +184,7 @@ impl ThreadxTcpWifiNetwork {
 
         nx_checked_call!(_nx_icmp_enable(ip_ptr.as_mut_ptr()))?;
 
-        let hostname = "myBoard0".as_ptr() as *mut core::ffi::c_char;
+        let hostname = c"myBoard0".as_ptr() as *mut core::ffi::c_char;
         let dhcp_client_ptr = DHCP_CLIENT.uninit();
 
         nx_checked_call!(_nx_dhcp_create(

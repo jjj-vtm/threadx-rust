@@ -12,13 +12,15 @@
  *     Microsoft         - Initial version
  *     Frédéric Desbiens - 2024 version.
  */
+//UINT nx_rand16( void );
 
 #ifndef NX_USER_H
 #define NX_USER_H
 
 //#define NX_DISABLE_FRAGMENTATION
 //#define NX_DISABLE_PACKET_CHAIN
-//#define NX_LITTLE_ENDIAN
+// #define NX_LITTLE_ENDIAN
+
 #define NX_SECURE_ENABLE
 #define NX_ENABLE_EXTENDED_NOTIFY_SUPPORT
 #define NX_ENABLE_IP_PACKET_FILTER
