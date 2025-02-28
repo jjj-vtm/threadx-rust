@@ -111,7 +111,7 @@ impl ThreadxTcpWifiNetwork {
 
         unsafe { _nx_system_initialize() };
 
-        let mut name = "TX 0\0".as_ptr() as *mut core::ffi::c_char;
+        let mut name = c"TX 0".as_ptr() as *mut core::ffi::c_char;
 
         let pool_mem_ptr = TX_PACKET_POOL_MEM.uninit().as_mut_ptr();
 
@@ -123,7 +123,7 @@ impl ThreadxTcpWifiNetwork {
             NETX_TX_POOL_SIZE as u32
         ))?;
 
-        name = "RX 0\0".as_ptr() as *mut core::ffi::c_char;
+        name = c"RX 0".as_ptr() as *mut core::ffi::c_char;
 
         let pool_mem_ptr = RX_PACKET_POOL_MEM.uninit().as_mut_ptr();
 
@@ -149,7 +149,7 @@ impl ThreadxTcpWifiNetwork {
             wwd_interface_t_WWD_STA_INTERFACE
         ))?;
 
-        name = "NetX IP Instance 0\0".as_ptr() as *mut core::ffi::c_char;
+        name = c"NetX IP Instance 0".as_ptr() as *mut core::ffi::c_char;
 
         let netx_ip_mem_ptr = NETX_IP_STACK.uninit().as_mut_ptr();
         let ip_ptr = IP_PTR.uninit();
@@ -250,7 +250,7 @@ impl ThreadxTcpWifiNetwork {
     }
 
     fn create_socket(ip_ptr: *mut NX_IP) -> Result<*mut NX_TCP_SOCKET, NxError> {
-        let name = "TCP_SOCKET\0".as_ptr() as *mut core::ffi::c_char;
+        let name = c"TCP_SOCKET".as_ptr() as *mut core::ffi::c_char;
         let socket_ptr = SOCKET_PTR.uninit();
 
         nx_checked_call!(_nx_tcp_socket_create(
