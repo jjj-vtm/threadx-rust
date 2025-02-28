@@ -14,6 +14,7 @@ use board::{hts221, BoardMxAz3166, DisplayType, I2CBus, LowLevelInit};
 use cortex_m::interrupt;
 use cortex_m::itm::Aligned;
 use defmt::println;
+use embedded_graphics::mono_font::ascii::FONT_9X18;
 use minimq::broker::IpBroker;
 use minimq::embedded_time::rate::Fraction;
 use minimq::embedded_time::{self, Clock, Instant};
@@ -64,8 +65,8 @@ impl ToPayload for Event {
 }
 
 pub enum FlagEvents {
-    WifiConnected = 0,
-    WifiDisconnected = 1,
+    WifiConnected = 1,
+    WifiDisconnected = 2,
 }
 
 #[global_allocator]
@@ -178,7 +179,6 @@ fn do_measurement(
     mut hts221: hts221::HTS221<I2CBus, stm32f4xx_hal::i2c::Error>,
     mut i2c: I2CBus,
 ) {
-    println!("Waiting ...");
     let _res = evt_handle
         .get(
             FlagEvents::WifiConnected as u32,
@@ -241,14 +241,13 @@ pub fn do_network(
     evt_handle: EventFlagsGroupHandle,
     display: &Mutex<Option<DisplayType<I2CBus>>>,
 ) {
-    println!("Do network...");
     let text_style = MonoTextStyleBuilder::new()
-        .font(&FONT_6X10)
+        .font(&FONT_9X18)
         .text_color(BinaryColor::On)
         .build();
     let mut display = display.lock(WaitForever).unwrap().take().unwrap();
     Text::with_baseline(
-        "Connection to WLAN (...)",
+        "Connecting...",
         Point::zero(),
         text_style,
         Baseline::Top,
@@ -258,7 +257,19 @@ pub fn do_network(
 
     display.flush().unwrap();
     defmt::println!("Initializing Network");
-    let network = ThreadxTcpWifiNetwork::initialize("SSID", "PW").unwrap();
+    let network = ThreadxTcpWifiNetwork::initialize("SSID", "PW");
+    if network.is_err() {
+        Text::with_baseline(
+            "Failure :(",
+            Point::zero(),
+            text_style,
+            Baseline::Top,
+        )
+        .draw(&mut display)
+        .unwrap();
+        panic!();
+    }
+    let network = network.unwrap();
     defmt::println!("Network initialized");
 
     Text::with_baseline(
