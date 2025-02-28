@@ -9,7 +9,7 @@ use crate::time::TxTicks;
 use crate::tx_checked_call;
 
 use super::error::TxError;
-use defmt::{error, println};
+use defmt::error;
 use num_traits::FromPrimitive;
 
 extern crate alloc;
@@ -35,12 +35,7 @@ impl Thread {
     }
 }
 
-fn __threadx_fn(val: u32) {
-    todo!()
-}
-// Design sketch to work with statically allocated "ThreadXTasks" which you can give to the ThreadX runtime... 
-struct  ThreadXTask{} 
-fn threadx_fn(val: u32) -> ThreadXTask {
+fn __threadx_fn(_val: u32) {
     todo!()
 }
 unsafe extern "C" fn thread_trampoline<F>(arg: ULONG)

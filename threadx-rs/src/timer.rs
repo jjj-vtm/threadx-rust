@@ -18,7 +18,6 @@ VOID        _tx_time_set(ULONG new_time);
 */
 
 use crate::time::TxTicks;
-use core::ffi::c_void;
 use core::ffi::CStr;
 
 use super::error::TxError;

@@ -1,4 +1,8 @@
 #![no_std]
+#![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
+#![allow(non_upper_case_globals)]
+#![allow(clippy::missing_safety_doc)]
 
 use core::ffi::c_void;
 
@@ -10,13 +14,9 @@ unsafe impl Sync for TX_MUTEX {}
 // TODO: the SVCall and PendSV call are probably specific to Arm Cortex
 // and should be enabled based on the selected target.
 extern "C" {
-    #[no_mangle]
     pub fn _tx_timer_interrupt() -> ();
-    #[no_mangle]
     pub fn __tx_SVCallHandler() -> ();
-    #[no_mangle]
     pub fn __tx_PendSVHandler() -> ();
-    #[no_mangle]
     pub static mut _tx_thread_system_stack_ptr : *mut c_void;
 }
 

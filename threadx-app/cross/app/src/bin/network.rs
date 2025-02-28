@@ -3,7 +3,6 @@
 
 use core::cell::RefCell;
 use core::ffi::CStr;
-use core::mem::MaybeUninit;
 use core::net::{Ipv4Addr, SocketAddr};
 use core::sync::atomic::AtomicU32;
 use core::time::Duration;
@@ -27,17 +26,16 @@ use threadx_app::network::network::ThreadxTcpWifiNetwork;
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::GetOption::*;
 use threadx_rs::event_flags::{EventFlagsGroup, EventFlagsGroupHandle};
-use threadx_rs::mutex::{Mutex, StaticMutex};
+use threadx_rs::mutex::Mutex;
 use threadx_rs::queue::{Queue, QueueReceiver, QueueSender};
 use threadx_rs::thread::{self, sleep};
 use threadx_rs::WaitOption::*;
 
 use threadx_rs::thread::Thread;
 use threadx_rs::timer::Timer;
-use threadx_sys::TX_MUTEX;
 
 use embedded_graphics::{
-    mono_font::{ascii::FONT_6X10, MonoTextStyleBuilder},
+    mono_font::MonoTextStyleBuilder,
     pixelcolor::BinaryColor,
     prelude::*,
     text::{Baseline, Text},
@@ -150,10 +148,9 @@ fn main() -> ! {
                 )
                 .unwrap();
             println!("WLAN thread started");
-            
+
             let measure_thread_stack = MEASURE_THREAD_STACK.init_with(|| [0u8; 1024]);
             let measure_thread: &'static mut Thread = MEASURE_THREAD.init(Thread::new());
-
 
             let _ = measure_thread
                 .initialize_with_autostart_box(
@@ -238,45 +235,35 @@ fn start_clock() -> impl Clock {
     ThreadXSecondClock {}
 }
 
+fn print_text(text: &str, display: &mut DisplayType<I2CBus>) {
+    let text_style = MonoTextStyleBuilder::new()
+        .font(&FONT_9X18)
+        .text_color(BinaryColor::On)
+        .build();
+    display.clear_buffer();
+    Text::with_baseline(text, Point::zero(), text_style, Baseline::Top)
+        .draw(display)
+        .unwrap();
+
+    display.flush().unwrap();
+}
+
 pub fn do_network(
     recv: QueueReceiver<Event>,
     evt_handle: EventFlagsGroupHandle,
     display: &Mutex<Option<DisplayType<I2CBus>>>,
 ) {
-    let text_style = MonoTextStyleBuilder::new()
-        .font(&FONT_9X18)
-        .text_color(BinaryColor::On)
-        .build();
-    let mut display = display.lock(WaitForever).unwrap().take().unwrap();
-    Text::with_baseline("Connecting...", Point::zero(), text_style, Baseline::Top)
-        .draw(&mut display)
-        .unwrap();
-
-    display.flush().unwrap();
     defmt::println!("Initializing Network");
+
+    let mut display = display.lock(WaitForever).unwrap().take().unwrap();
+    print_text("WLAN()\nMQTT()", &mut display);
     let network = ThreadxTcpWifiNetwork::initialize("", "");
     if network.is_err() {
-        display.clear_buffer();
-        Text::with_baseline("Failure :(", Point::zero(), text_style, Baseline::Top)
-            .draw(&mut display)
-            .unwrap();
-        display.flush().unwrap();
+        print_text("Failure :(", &mut display);
         panic!();
     }
     let network = network.unwrap();
     defmt::println!("Network initialized");
-
-    Text::with_baseline(
-        "Connected to WLAN (/)",
-        Point::zero(),
-        text_style,
-        Baseline::Top,
-    )
-    .draw(&mut display)
-    .unwrap();
-
-    display.flush().unwrap();
-
     let remote_addr = SocketAddr::new(core::net::IpAddr::V4(Ipv4Addr::new(192, 168, 2, 105)), 1883);
     let mut buffer = [0u8; 128];
     let mqtt_cfg = ConfigBuilder::new(IpBroker::new(remote_addr.ip()), &mut buffer)
@@ -284,6 +271,7 @@ pub fn do_network(
         .client_id("mytest")
         .unwrap();
 
+    print_text("WLAN(x)\nMQTT()", &mut display);
     let clock = start_clock();
     let mut mqtt_client = Minimq::new(network, clock, mqtt_cfg);
 
@@ -294,7 +282,7 @@ pub fn do_network(
     loop {
         match mqtt_client.poll(|_client, _topic, _payload, _properties| 1) {
             Ok(_) => (),
-            Err(minimq::Error::Network(e)) => {
+            Err(minimq::Error::Network(_)) => {
                 defmt::println!("Network disconnect, trying to reconnect.")
             }
             Err(minimq::Error::SessionReset) => {
@@ -303,14 +291,15 @@ pub fn do_network(
             _ => panic!("Error during poll, giving up."),
         }
         if mqtt_client.client().is_connected() {
+            print_text("WLAN(x)\nMQTT(x)", &mut display);
             if let Ok(evt) = recv.receive(NoWait) {
                 let _ = mqtt_client
                     .client()
                     .publish(Publication::new("/cellar/temperature", evt));
             }
 
-            // Poll every 500ms
-            let _ = thread::sleep(Duration::from_millis(500)).unwrap();
+            // Poll every 1000ms
+            let _ = thread::sleep(Duration::from_millis(1000)).unwrap();
         }
     }
 }

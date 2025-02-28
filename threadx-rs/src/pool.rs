@@ -6,7 +6,7 @@ use core::{
 };
 
 use threadx_sys::{
-    _tx_block_allocate, _tx_block_pool_create, _tx_block_pool_delete, _tx_block_pool_info_get,
+    _tx_block_allocate, _tx_block_pool_create, _tx_block_pool_delete, 
     _tx_block_pool_prioritize, _tx_block_release, _tx_byte_allocate, _tx_byte_pool_create,
     _tx_byte_pool_delete, _tx_byte_release, TX_BLOCK_POOL, TX_BYTE_POOL, TX_NO_WAIT,
     TX_WAIT_FOREVER, ULONG,
@@ -169,7 +169,7 @@ impl<'memory> BlockPoolHandle<'memory> {
     #define tx_block_release                            _tx_block_release
          */
 
-    pub fn prioritize(&mut self, mem: &'static mut [u8]) -> Result<(), TxError> {
+    pub fn prioritize(&mut self, _mem: &'static mut [u8]) -> Result<(), TxError> {
         tx_checked_call!(_tx_block_pool_prioritize(self.0))
     }
 

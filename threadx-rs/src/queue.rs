@@ -19,7 +19,7 @@ UINT        _tx_queue_front_send(TX_QUEUE *queue_ptr, VOID *source_ptr, ULONG wa
 
 use super::{error::TxError, WaitOption};
 use crate::tx_checked_call;
-use core::mem::{self, size_of};
+use core::mem::size_of;
 use core::{ffi::CStr, mem::MaybeUninit};
 use defmt::{error, println};
 use num_traits::FromPrimitive;

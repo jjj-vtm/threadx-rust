@@ -34,11 +34,9 @@ use core::{
 };
 
 use crate::{mutex::StaticMutex, WaitOption::WaitForever};
-use defmt::println;
-use static_cell::StaticCell;
 use threadx_sys::TX_MUTEX_STRUCT;
 
-use crate::{event_flags::EventFlagsGroupHandle, mutex::Mutex};
+use crate::event_flags::EventFlagsGroupHandle;
 extern crate alloc;
 
 /*
@@ -70,9 +68,8 @@ impl Signal {
             )
             .is_ok()
         {
-            let mut m = StaticMutex::new(SignalState::Empty, unsafe { &mut MUTEX_S });
-            m.initialize(c"TestMutex", false)
-                .unwrap();
+            let m = StaticMutex::new(SignalState::Empty, &raw mut MUTEX_S);
+            m.initialize(c"TestMutex", false).unwrap();
             m
         } else {
             panic!("Parallel execution on different threads is not supported at the moment.");

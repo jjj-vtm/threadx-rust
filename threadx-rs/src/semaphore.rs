@@ -1,9 +1,7 @@
 
-use core::mem::size_of;
-use core::{mem::MaybeUninit, ffi::CStr, marker::PhantomData};
+use core::{mem::MaybeUninit, ffi::CStr};
 use crate::tx_checked_call;
 use super::{error::TxError, WaitOption};
-use defmt::debug;
 use defmt::error;
 use num_traits::FromPrimitive;
 use threadx_sys::{TX_SEMAPHORE, _tx_semaphore_create, _tx_semaphore_delete, _tx_semaphore_get, _tx_semaphore_put, _tx_semaphore_prioritize, _tx_semaphore_put_notify};

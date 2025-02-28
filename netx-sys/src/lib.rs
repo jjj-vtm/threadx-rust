@@ -1,6 +1,8 @@
 #![no_std]
-
-use core::ffi::c_void;
+#![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
+#![allow(non_upper_case_globals)]
+#![allow(clippy::missing_safety_doc)]
 
 include!("generated.rs");
 
@@ -13,7 +15,7 @@ extern "C" {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn printf(format: *const core::ffi::c_char) -> core::ffi::c_int {
+pub unsafe extern "C" fn printf(_format: *const core::ffi::c_char) -> core::ffi::c_int {
     1
 }
 
@@ -28,7 +30,7 @@ pub unsafe extern "C" fn rand() -> UINT {
 // Constants that are not parsed by bindgen
 
 pub const NX_IPV4_PACKET: ULONG = (14 + 12 + 18) + 20; /* Phyisical Header (Wiced) + 20 bytes of IP header          */
-pub const NX_IPV4_TCP_PACKET: ULONG = (NX_IPV4_PACKET + 20); /* IP header plus 20 bytes        */
+pub const NX_IPV4_TCP_PACKET: ULONG = NX_IPV4_PACKET + 20; /* IP header plus 20 bytes        */
 pub const NX_DONT_FRAGMENT: ULONG = 0x00004000 as ULONG;
 pub const NX_IP_NORMAL: ULONG = 0x00000000 as ULONG;
 pub const NX_NO_WAIT: u32 = 0;

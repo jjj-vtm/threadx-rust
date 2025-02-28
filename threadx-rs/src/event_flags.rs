@@ -1,10 +1,9 @@
 use core::ffi::CStr;
-use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 
 use threadx_sys::{_tx_event_flags_create, TX_EVENT_FLAGS_GROUP};
 use threadx_sys::{
-    _tx_event_flags_delete, _tx_event_flags_get, _tx_event_flags_set, _tx_event_flags_set_notify,
+    _tx_event_flags_get, _tx_event_flags_set,
     ULONG,
 };
 
