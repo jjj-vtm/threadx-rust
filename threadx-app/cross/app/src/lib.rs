@@ -14,6 +14,8 @@ pub mod threadx;
 
 pub mod network;
 
+pub mod uprotocol_v1;
+pub mod utransport;
 
 // same panicking *behavior* as `panic-probe` but doesn't print a panic message
 // this prevents the panic message being printed *twice* when `defmt::panic` is invoked

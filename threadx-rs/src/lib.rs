@@ -115,6 +115,20 @@ macro_rules! tx_str {
         core::ffi::CStr::from_ptr(concat!($lit, "\0").as_ptr() as *const core::ffi::c_char)
     };
 }
+#[macro_export]
+macro_rules! tx_checked_call_no_log {
+    ($func:ident($($arg:expr),*)) => {
+        {
+            let ret = unsafe { $func($($arg),*) };
+            if ret != threadx_sys::TX_SUCCESS {
+                crate::error::TxResult::Err(TxError::from_u32(ret).unwrap_or(TxError::Unknown))
+            } else {
+                crate::error::TxResult::Ok(())
+            }
+        }
+    }
+}
+
 
 #[macro_export]
 macro_rules! tx_checked_call {

@@ -18,7 +18,7 @@ UINT        _tx_queue_front_send(TX_QUEUE *queue_ptr, VOID *source_ptr, ULONG wa
 */
 
 use super::{error::TxError, WaitOption};
-use crate::tx_checked_call;
+use crate::{tx_checked_call, tx_checked_call_no_log};
 use core::mem::size_of;
 use core::{ffi::CStr, mem::MaybeUninit};
 use defmt::{error, println};
@@ -91,7 +91,7 @@ impl<T> QueueSender<T> {
 impl<T> QueueReceiver<T> {
     pub fn receive(&self, wait: WaitOption) -> Result<T, TxError> {
         let mut message = core::mem::MaybeUninit::uninit();
-        tx_checked_call!(_tx_queue_receive(
+        tx_checked_call_no_log!(_tx_queue_receive(
             self.0,
             message.as_mut_ptr() as *mut core::ffi::c_void,
             wait as ULONG

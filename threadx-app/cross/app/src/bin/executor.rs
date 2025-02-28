@@ -19,11 +19,13 @@ use embedded_graphics::{
     prelude::*,
     text::{Baseline, Text},
 };
+use prost::Message;
 use static_cell::StaticCell;
+use threadx_app::uprotocol_v1::{UAttributes, UMessage};
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::EventFlagsGroup;
 use threadx_rs::executor::block_on;
-use threadx_rs::pool::{self, BytePool};
+use threadx_rs::pool::BytePool;
 
 use threadx_rs::thread::{sleep, Thread};
 
@@ -34,7 +36,6 @@ static GLOBAL: ThreadXAllocator = ThreadXAllocator::new();
 
 static BP: StaticCell<BytePool> = StaticCell::new();
 
-static THREAD1: StaticCell<Thread> = StaticCell::new();
 static THREAD2: StaticCell<Thread> = StaticCell::new();
 
 static BP_MEM: StaticCell<[u8; 2048]> = StaticCell::new();
@@ -60,9 +61,7 @@ fn main() -> ! {
 
             // Inefficient, creates array on the stack first.
             let bp_mem = BP_MEM.init_with(|| [0u8; 2048]);
-            let bp = bp
-                .initialize(c"pool1", bp_mem)
-                .unwrap();
+            let bp = bp.initialize(c"pool1", bp_mem).unwrap();
 
             //allocate memory for the two tasks.
             let task2_mem = bp.allocate(1024, true).unwrap();
@@ -72,33 +71,31 @@ fn main() -> ! {
             GLOBAL.initialize(heap_mem).unwrap();
 
             let evt = EXECUTOR_EVENT.init(EventFlagsGroup::new());
-            let event_handle = evt
-                .initialize(c"ExecutorGroup")
-                .unwrap();
+            let event_handle = evt.initialize(c"ExecutorGroup").unwrap();
 
             let thread2_fn = Box::new(move || {
                 // Get the display out out the board structure
-                let mut display = interrupt::free(|cs| {
-                    let mut board = BOARD.borrow(cs).borrow_mut();
-                    board.as_mut().unwrap().display.take().unwrap()
-                });
                 let text_style = MonoTextStyleBuilder::new()
                     .font(&FONT_6X10)
                     .text_color(BinaryColor::On)
                     .build();
                 //block_on(NeverFinished {}, event_handle);
-                block_on(test_async(), event_handle);
-                Text::with_baseline("Test", Point::zero(), text_style, Baseline::Top)
-                    .draw(&mut display)
-                    .unwrap();
+                let ua = UAttributes::default();
+                let mut u_m = UMessage::default();
 
-                        display.flush().unwrap();
+                u_m.attributes.replace(ua);
+                let mut buf = [0u8; 24];
+                let _ = UMessage::encode(&u_m, &mut buf.as_mut_slice()).unwrap();
+
+                block_on(test_async(), event_handle);
                 loop {
                     interrupt::free(|cs| {
                         let mut binding = BOARD.borrow(cs).borrow_mut();
                         let board = binding.as_mut().unwrap();
                         let hts221 = board.temp_sensor.as_mut().unwrap();
-                        let deg = hts221.temperature_x8(&mut board.i2c_bus.unwrap()).unwrap() as f32 / 8.0;
+                        let deg = hts221.temperature_x8(&mut board.i2c_bus.unwrap()).unwrap()
+                            as f32
+                            / 8.0;
                         println!("Current temperature: {}", deg);
                     });
                     let _ = sleep(Duration::from_secs(5));
@@ -129,7 +126,7 @@ impl Future for NeverFinished {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let w1 = cx.waker().clone();
+        let _w1 = cx.waker().clone();
         Poll::Pending
     }
 }
