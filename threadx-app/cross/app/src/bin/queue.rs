@@ -48,7 +48,7 @@ fn main() -> ! {
             let bp = BP.init(BytePool::new());
 
             let bp = bp
-                .initialize(CStr::from_bytes_until_nul(b"pool1\0").unwrap(), bp_mem)
+                .initialize(c"pool1", bp_mem)
                 .unwrap();
             //allocate memory for the two tasks.
             let task1_mem = bp.allocate(256, true).unwrap();

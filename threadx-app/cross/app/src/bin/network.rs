@@ -2,7 +2,6 @@
 #![no_std]
 
 use core::cell::RefCell;
-use core::ffi::CStr;
 use core::net::{Ipv4Addr, SocketAddr};
 use core::sync::atomic::AtomicU32;
 use core::time::Duration;
@@ -221,10 +220,9 @@ fn start_clock() -> impl Clock {
     static CLOCK_TIMER: StaticCell<Timer> = StaticCell::new();
     let clock_timer = CLOCK_TIMER.init(Timer::new());
 
-    let clock_name = CStr::from_bytes_until_nul(b"clock_timer_mqtt\0").unwrap();
     let _ = clock_timer
         .initialize_with_fn(
-            clock_name,
+            c"clock_timer_mqtt",
             Some(clock_tick),
             0,
             Duration::from_secs(1),

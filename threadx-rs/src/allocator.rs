@@ -1,5 +1,5 @@
 use crate::error::TxError;
-use crate::{tx_checked_call, tx_str};
+use crate::tx_checked_call;
 use core::sync::atomic::AtomicBool;
 use core::{
     alloc::{GlobalAlloc, Layout},
@@ -9,7 +9,7 @@ use core::{
 use defmt::error;
 use num_traits::FromPrimitive;
 use threadx_sys::{
-    _tx_byte_allocate, _tx_byte_pool_create, _tx_byte_release, TX_BYTE_POOL, TX_WAIT_FOREVER, ULONG,
+    _tx_byte_allocate, _tx_byte_pool_create, _tx_byte_release, CHAR, TX_BYTE_POOL, TX_WAIT_FOREVER, ULONG
 };
 
 /// ThreadX allocator for Rust. Instantiate this struct and use it as the global allocator.
@@ -43,9 +43,11 @@ impl ThreadXAllocator {
 
     pub fn initialize(&'static self, pool_memory: &'static mut [u8]) -> Result<(), TxError> {
         // TODO: Panic if initialized twice. Check if name is not global (and not zero)
+        let pool_name = c"global";
+
         let res = tx_checked_call!(_tx_byte_pool_create(
             self.pool_ptr,
-            tx_str!("global").as_ptr() as *mut i8,
+            pool_name.as_ptr() as *mut CHAR,
             pool_memory.as_mut_ptr() as *mut core::ffi::c_void,
             pool_memory.len() as ULONG
         ));

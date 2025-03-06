@@ -1,4 +1,4 @@
-use core::ffi::{c_void, CStr};
+use core::ffi::CStr;
 use core::mem::MaybeUninit;
 use core::time::Duration;
 
@@ -37,13 +37,6 @@ impl Thread {
 
 fn __threadx_fn(_val: u32) {
     todo!()
-}
-unsafe extern "C" fn thread_trampoline<F>(arg: ULONG)
-where
-    F: Fn(),
-{
-    let closure = &mut *(arg as *mut F);
-    closure();
 }
 
 unsafe extern "C" fn thread_box_callback_trampoline(arg: ULONG) {

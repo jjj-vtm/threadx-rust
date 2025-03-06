@@ -103,18 +103,6 @@ unsafe extern "C" fn tx_application_define(mem_start: *mut c_void) {
     // The kernel is started after this callback returns.
     DEFINE_CB.unwrap()(mem_start as *mut u8);
 }
-
-#[macro_export]
-macro_rules! tx_str {
-    ($lit:expr) => {
-        // Currently, there is no working way to concatenate a byte string
-        // literal out of bytestring or string literals. Otherwise, we could
-        // use from_static_bytes and accept byte strings as well.
-        // See https://github.com/rust-lang/rfcs/pull/566
-
-        core::ffi::CStr::from_ptr(concat!($lit, "\0").as_ptr() as *const core::ffi::c_char)
-    };
-}
 #[macro_export]
 macro_rules! tx_checked_call_no_log {
     ($func:ident($($arg:expr),*)) => {
