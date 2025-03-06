@@ -1,4 +1,4 @@
-use crate::uprotocol_v1::{UMessage, UStatus, UUri};
+use crate::uprotocol_v1::{UMessage, UStatus};
 extern crate alloc;
 
 #[trait_variant::make(UTransport: Send)]

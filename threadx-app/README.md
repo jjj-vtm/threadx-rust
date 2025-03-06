@@ -22,7 +22,7 @@ $ cargo install probe-rs --features cli
 
 #### 3. `Rust target`:
 
-This project is currently set up for the STM32F103.
+This project is currently set up for the MXAZ3166.
 
 ``` console
 $ rustup target add thumbv7m-none-eabi

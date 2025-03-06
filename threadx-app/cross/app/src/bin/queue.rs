@@ -1,8 +1,7 @@
 #![no_main]
 #![no_std]
 
-use core::ffi::CStr;
-
+use alloc::boxed::Box;
 use board::{BoardMxAz3166, LowLevelInit};
 
 use defmt::println;
@@ -64,7 +63,7 @@ fn main() -> ! {
 
             let thread = THREAD1.init(Thread::new());
             let thread1_func = move || {
-                let mut arg: u32 = 0;
+                let arg: u32 = 0;
 
                 println!("Thread 1:{}", arg);
                 let mut count: u32 = 1;
@@ -77,7 +76,7 @@ fn main() -> ! {
             };
 
             let _th_handle = thread
-                .initialize_with_autostart("thread1", thread1_func, task1_mem.consume(), 1, 1, 0)
+                .initialize_with_autostart_box("thread1", Box::new(thread1_func), task1_mem.consume(), 1, 1, 0)
                 .unwrap();
 
             let thread2_fn = move || loop {
@@ -94,7 +93,7 @@ fn main() -> ! {
             let thread2 = THREAD2.init(Thread::new());
 
             let _th2_handle = thread2
-                .initialize_with_autostart("thread2", thread2_fn, task2_mem.consume(), 1, 1, 0)
+                .initialize_with_autostart_box("thread2", Box::new(thread2_fn), task2_mem.consume(), 1, 1, 0)
                 .unwrap();
             println!("Init done.")
         },

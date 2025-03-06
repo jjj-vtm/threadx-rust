@@ -1,10 +1,9 @@
 [package]
 name = "netx-sys"
 version = "0.2.1"
-authors = ["Sojan James <Sojan.James@gmail.com>"]
+authors = ["Jan Jongen"]
 edition = "2021"
-description = "Rust bindings for ThreadX"
-homepage = "https://github.com/sjames/threadx-sys"
+description = "Rust bindings for NetX"
 build = "build.rs"
 links = "netx"
 license-file = "LICENSE"

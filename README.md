@@ -1,16 +1,16 @@
 ## NetX rust integration
 
-This takes the build process and most of the structures from https://github.com/sabaton-systems/threadx-rust/ and builds a threadX + netX variant. 
+This takes the build process and most of the structures from https://github.com/sabaton-systems/threadx-rust/ and builds a ThreadX + NetX variant.
 Compared to the original we did:
 
 - Fix some UB
-- Generate netX bindings
+- Generate NetX bindings
 - Implement simple async executor based on https://github.com/zesterer/pollster
-- Implement embedded-nal interface for netX/Wiced Wifi
+- Implement embedded-nal interface for NetX/Wiced Wifi
 
 ## Quickstart
 
-Switch to the netx-fork branch via `git switch netx-fork` and do a `git pull`. In the `network.rs` example adapt the SSID, WLAN-Passwort and the MQTT settings accordingly.  
+In the `network.rs` example adapt the SSID, WLAN-Passwort and the MQTT settings accordingly.  
 
 Goto `threadx-app/cross/app` and run:
 
