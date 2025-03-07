@@ -13,15 +13,19 @@ use cortex_m::interrupt;
 use cortex_m::itm::Aligned;
 use defmt::println;
 use embedded_graphics::mono_font::ascii::FONT_9X18;
+use heapless::String;
 use minimq::broker::IpBroker;
 use minimq::embedded_time::rate::Fraction;
 use minimq::embedded_time::{self, Clock, Instant};
 use minimq::publication::ToPayload;
-use minimq::{ConfigBuilder, Minimq, Publication};
+use minimq::types::{Properties, Utf8String};
+use minimq::{ConfigBuilder, Minimq, Property, Publication};
 use netx_sys::ULONG;
+use prost::Message;
 use static_cell::StaticCell;
 use threadx_app::network::network::ThreadxTcpWifiNetwork;
 
+use threadx_app::uprotocol_v1::{UAttributes, UMessage, Uuid};
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::GetOption::*;
 use threadx_rs::event_flags::{EventFlagsGroup, EventFlagsGroupHandle};
@@ -32,6 +36,8 @@ use threadx_rs::WaitOption::*;
 
 use threadx_rs::thread::Thread;
 use threadx_rs::timer::Timer;
+
+use core::fmt::Write;
 
 use embedded_graphics::{
     mono_font::MonoTextStyleBuilder,
@@ -52,12 +58,14 @@ impl ToPayload for Event {
     type Error = ();
 
     fn serialize(self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
+        let mut str = String::<4>::new();
+
         let measure = match self {
             Event::TemperatureMeasurement(m) => m,
         };
-        let bytes = i32::to_ne_bytes(measure);
-        buffer[..size_of::<i32>()].copy_from_slice(&bytes);
-        Ok(size_of::<i32>())
+        let _ = write!(str, "{measure}");
+        buffer[..str.len()].copy_from_slice(&str.as_bytes());
+        Ok(str.len())
     }
 }
 
@@ -245,12 +253,22 @@ fn print_text(text: &str, display: &mut DisplayType<I2CBus>) {
 
     display.flush().unwrap();
 }
+const KEY_UPROTOCOL_VERSION: &str = "uP";
+const KEY_MESSAGE_ID: &str = "1";
+const KEY_TYPE: &str = "2";
+const KEY_SOURCE: &str = "3";
+const KEY_SINK: &str = "4";
+const KEY_PRIORITY: &str = "5";
+const KEY_PERMISSION_LEVEL: &str = "7";
+const KEY_COMMSTATUS: &str = "8";
+const KEY_TOKEN: &str = "10";
+const KEY_TRACEPARENT: &str = "11";
 
 pub fn do_network(
     recv: QueueReceiver<Event>,
     evt_handle: EventFlagsGroupHandle,
     display: &Mutex<Option<DisplayType<I2CBus>>>,
-) {
+) -> ! {
     defmt::println!("Initializing Network");
 
     let mut display = display.lock(WaitForever).unwrap().take().unwrap();
@@ -262,8 +280,8 @@ pub fn do_network(
     }
     let network = network.unwrap();
     defmt::println!("Network initialized");
-    let remote_addr = SocketAddr::new(core::net::IpAddr::V4(Ipv4Addr::new(192, 168, 2, 105)), 1883);
-    let mut buffer = [0u8; 128];
+    let remote_addr = SocketAddr::new(core::net::IpAddr::V4(Ipv4Addr::new(192, 168, 2, 100)), 1883);
+    let mut buffer = [0u8; 512];
     let mqtt_cfg = ConfigBuilder::new(IpBroker::new(remote_addr.ip()), &mut buffer)
         .keepalive_interval(60)
         .client_id("mytest")
@@ -291,9 +309,25 @@ pub fn do_network(
         if mqtt_client.client().is_connected() {
             print_text("WLAN(x)\nMQTT(x)", &mut display);
             if let Ok(evt) = recv.receive(NoWait) {
+                // TODO: Use upRust to do it all properly. This creates a very simple (valid) uMessage MQTT payload.
+                let uuid = uuid::uuid!("01956d55-177b-7556-baf6-040e3127165e");
+                let buffer = &mut uuid::Uuid::encode_buffer();
+                let uuid_hyp = uuid.as_hyphenated().encode_lower(buffer);
+
+                let user_properties = [
+                    Property::UserProperty(Utf8String(KEY_UPROTOCOL_VERSION), Utf8String("1")),
+                    // UUID handling
+                    Property::UserProperty(Utf8String(KEY_MESSAGE_ID), Utf8String(uuid_hyp)),
+                    Property::UserProperty(Utf8String(KEY_TYPE), Utf8String("up-pub.v1")),
+                    Property::UserProperty(Utf8String(KEY_SOURCE), Utf8String("//vehicle_B/000A/2/800A")),
+                ];
+
                 let _ = mqtt_client
                     .client()
-                    .publish(Publication::new("/cellar/temperature", evt));
+                    .publish(
+                        Publication::new("Vehicle_B/000A/0/2/800A", evt).properties(&user_properties),
+                    )
+                    .unwrap();
             }
 
             // Poll every 1000ms
