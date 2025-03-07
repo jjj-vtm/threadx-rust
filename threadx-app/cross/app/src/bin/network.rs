@@ -7,6 +7,7 @@ use core::sync::atomic::AtomicU32;
 use core::time::Duration;
 
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 use board::{hts221, BoardMxAz3166, DisplayType, I2CBus, LowLevelInit};
 
 use cortex_m::interrupt;
@@ -17,18 +18,18 @@ use heapless::String;
 use minimq::broker::IpBroker;
 use minimq::embedded_time::rate::Fraction;
 use minimq::embedded_time::{self, Clock, Instant};
-use minimq::publication::ToPayload;
-use minimq::types::{Properties, Utf8String};
-use minimq::{ConfigBuilder, Minimq, Property, Publication};
+use minimq::{ConfigBuilder, Minimq};
 use netx_sys::ULONG;
-use prost::Message;
 use static_cell::StaticCell;
+use threadx_app::minimqtransport::MiniMqBasedTransport;
 use threadx_app::network::network::ThreadxTcpWifiNetwork;
 
-use threadx_app::uprotocol_v1::{UAttributes, UMessage, Uuid};
+use threadx_app::uprotocol_v1::UMessage;
+use threadx_app::utransport::LocalUTransport;
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::GetOption::*;
 use threadx_rs::event_flags::{EventFlagsGroup, EventFlagsGroupHandle};
+use threadx_rs::executor::block_on;
 use threadx_rs::mutex::Mutex;
 use threadx_rs::queue::{Queue, QueueReceiver, QueueSender};
 use threadx_rs::thread::{self, sleep};
@@ -53,19 +54,15 @@ pub type UINT = ::core::ffi::c_uint;
 pub enum Event {
     TemperatureMeasurement(i32),
 }
-
-impl ToPayload for Event {
-    type Error = ();
-
-    fn serialize(self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
+impl Into<Vec<u8>> for Event {
+    fn into(self) -> Vec<u8> {
         let mut str = String::<4>::new();
 
         let measure = match self {
             Event::TemperatureMeasurement(m) => m,
         };
         let _ = write!(str, "{measure}");
-        buffer[..str.len()].copy_from_slice(&str.as_bytes());
-        Ok(str.len())
+        str.as_bytes().to_vec()
     }
 }
 
@@ -95,6 +92,8 @@ static QUEUE_MEM: StaticCell<[u8; 128]> = StaticCell::new();
 static EVENT_GROUP: StaticCell<EventFlagsGroup> = StaticCell::new();
 static DISPLAY: StaticCell<Mutex<Option<DisplayType<I2CBus>>>> = StaticCell::new();
 
+static EXECUTOR_EVENT: StaticCell<EventFlagsGroup> = StaticCell::new();
+
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let tx = threadx_rs::Builder::new(
@@ -106,6 +105,7 @@ fn main() -> ! {
         |mem_start| {
             defmt::println!("Define application. Memory starts at: {} ", mem_start);
 
+            // Initialize global heap
             let heap = Aligned([0; 1024]);
             let heap_mem = HEAP.init_with(|| heap.0);
 
@@ -253,16 +253,6 @@ fn print_text(text: &str, display: &mut DisplayType<I2CBus>) {
 
     display.flush().unwrap();
 }
-const KEY_UPROTOCOL_VERSION: &str = "uP";
-const KEY_MESSAGE_ID: &str = "1";
-const KEY_TYPE: &str = "2";
-const KEY_SOURCE: &str = "3";
-const KEY_SINK: &str = "4";
-const KEY_PRIORITY: &str = "5";
-const KEY_PERMISSION_LEVEL: &str = "7";
-const KEY_COMMSTATUS: &str = "8";
-const KEY_TOKEN: &str = "10";
-const KEY_TRACEPARENT: &str = "11";
 
 pub fn do_network(
     recv: QueueReceiver<Event>,
@@ -289,49 +279,32 @@ pub fn do_network(
 
     print_text("WLAN(x)\nMQTT()", &mut display);
     let clock = start_clock();
-    let mut mqtt_client = Minimq::new(network, clock, mqtt_cfg);
-
+    let mut transport = MiniMqBasedTransport::new(Minimq::new(network, clock, mqtt_cfg));
     // Signal that measurements can begin
     let _res = evt_handle
         .publish(FlagEvents::WifiConnected as u32)
         .unwrap();
+
+    let evt = EXECUTOR_EVENT.init(EventFlagsGroup::new());
+    let executor_event_handle = evt.initialize(c"ExecutorGroup").unwrap();
+
     loop {
-        match mqtt_client.poll(|_client, _topic, _payload, _properties| 1) {
-            Ok(_) => (),
-            Err(minimq::Error::Network(_)) => {
-                defmt::println!("Network disconnect, trying to reconnect.")
-            }
-            Err(minimq::Error::SessionReset) => {
-                defmt::println!("Session reset.")
-            }
-            _ => panic!("Error during poll, giving up."),
-        }
-        if mqtt_client.client().is_connected() {
+        // Need to poll the transport in order to keep it connected
+        transport.poll();
+        if transport.is_connected() {
             print_text("WLAN(x)\nMQTT(x)", &mut display);
             if let Ok(evt) = recv.receive(NoWait) {
                 // TODO: Use upRust to do it all properly. This creates a very simple (valid) uMessage MQTT payload.
-                let uuid = uuid::uuid!("01956d55-177b-7556-baf6-040e3127165e");
-                let buffer = &mut uuid::Uuid::encode_buffer();
-                let uuid_hyp = uuid.as_hyphenated().encode_lower(buffer);
+                // Create a umessage and then call send and block_on from the
+                let mut umessage = UMessage::default();
+                umessage.payload.replace(evt.into());
 
-                let user_properties = [
-                    Property::UserProperty(Utf8String(KEY_UPROTOCOL_VERSION), Utf8String("1")),
-                    // UUID handling
-                    Property::UserProperty(Utf8String(KEY_MESSAGE_ID), Utf8String(uuid_hyp)),
-                    Property::UserProperty(Utf8String(KEY_TYPE), Utf8String("up-pub.v1")),
-                    Property::UserProperty(Utf8String(KEY_SOURCE), Utf8String("//vehicle_B/000A/2/800A")),
-                ];
-
-                let _ = mqtt_client
-                    .client()
-                    .publish(
-                        Publication::new("Vehicle_B/000A/0/2/800A", evt).properties(&user_properties),
-                    )
-                    .unwrap();
+                let _res = block_on(transport.send(umessage), executor_event_handle);
             }
-
-            // Poll every 1000ms
-            let _ = thread::sleep(Duration::from_millis(1000)).unwrap();
+        } else {
+            print_text("WLAN(x)\nMQTT()", &mut display);
         }
+        // Poll every 1000ms
+        let _ = thread::sleep(Duration::from_millis(1000)).unwrap();
     }
 }

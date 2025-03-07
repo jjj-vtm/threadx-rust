@@ -34,6 +34,7 @@ use core::{
 };
 
 use crate::{mutex::StaticMutex, WaitOption::WaitForever};
+use defmt::println;
 use threadx_sys::TX_MUTEX_STRUCT;
 
 use crate::event_flags::EventFlagsGroupHandle;

@@ -14,7 +14,7 @@ pub trait LocalUTransport {
     /// # Errors
     ///
     /// Returns an error if the message could not be sent.
-    async fn send(&self, message: UMessage) -> Result<(), UStatus>;
+    async fn send(&mut self, message: UMessage) -> Result<(), UStatus>;
 
     // No listener / subscriptions supported.
 }

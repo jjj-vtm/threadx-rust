@@ -155,7 +155,6 @@ impl<T> Drop for StaticMutex<T> {
     fn drop(&mut self) {
         let mutex_ptr = unsafe { self.mutex.get().read() };
 
-        println!("Static mutex dropped at {}", mutex_ptr as *mut TX_MUTEX);
         let _ = tx_checked_call!(_tx_mutex_delete(mutex_ptr));
     }
 }
