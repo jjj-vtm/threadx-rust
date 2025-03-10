@@ -6,7 +6,7 @@ use core::{
     ffi::c_void,
     mem::MaybeUninit,
 };
-use defmt::error;
+use defmt::{error, println};
 use num_traits::FromPrimitive;
 use threadx_sys::{
     _tx_byte_allocate, _tx_byte_pool_create, _tx_byte_release, CHAR, TX_BYTE_POOL, TX_WAIT_FOREVER, ULONG

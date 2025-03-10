@@ -30,8 +30,8 @@ Only supports the MXAZ3166 board!
 
 ### Async executor
 
-- block_on can only work with one thread since the mutex can only be instantiated once
-- Implementation also does use only a single event flag (0x1). Using more we could support up to 32 threads executing tasks 
+- 32 parallel async tasks are supported
+- Simple executor which blocks the thread it runs on 
 
 ## Control structures
 

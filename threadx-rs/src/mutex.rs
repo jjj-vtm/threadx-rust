@@ -113,7 +113,7 @@ impl<T> DerefMut for MutexGuardStatic<'_, T> {
 
 impl<T> Drop for MutexGuardStatic<'_, T> {
     fn drop(&mut self) {
-        let mutex_ptr = self.mutex.mutex.get() as *mut TX_MUTEX_STRUCT;
+        let mutex_ptr = unsafe { self.mutex.mutex.get().read() };
         if tx_checked_call!(_tx_mutex_put(mutex_ptr)).is_err() {
             error!("MutexGuard::drop failed to put mutex");
         };

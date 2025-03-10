@@ -33,8 +33,8 @@ use core::{
     task::{Context, Poll, Waker},
 };
 
-use crate::{mutex::StaticMutex, WaitOption::WaitForever};
-use defmt::println;
+use crate::{event_flags::EventFlagsGroup, mutex::StaticMutex, WaitOption::WaitForever};
+use static_cell::StaticCell;
 use threadx_sys::TX_MUTEX_STRUCT;
 
 use crate::event_flags::EventFlagsGroupHandle;
@@ -44,51 +44,38 @@ extern crate alloc;
  * A port of the main parts of the pollster library using ThreadX components.
  */
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum SignalState {
+    Unused,
     Empty,
     Waiting,
     Notified,
 }
 
+static EXECUTOR_EVENT: StaticCell<EventFlagsGroup> = StaticCell::new();
+static mut MUTEX_S: TX_MUTEX_STRUCT = unsafe { MaybeUninit::zeroed().assume_init() };
+static SIGNALS: StaticMutex<[SignalState; 31]> =
+    StaticMutex::new([SignalState::Unused; 31], &raw mut MUTEX_S);
+
 struct Signal {
-    state: StaticMutex<SignalState>,
+    state_index: usize,
     event_flag_handle: EventFlagsGroupHandle,
 }
-static mut MUTEX_S: TX_MUTEX_STRUCT = unsafe { MaybeUninit::zeroed().assume_init() };
-static SIGNAL_IN_USE: AtomicBool = AtomicBool::new(false);
+static EXECUTOR_INITIALIZED: AtomicBool = AtomicBool::new(false);
 // TODO: Does not work for more then one signal. Should work for 32 (number of event_flags))
 impl Signal {
-    fn new(event_flag_handle: EventFlagsGroupHandle) -> Self {
-        let mm = if SIGNAL_IN_USE
-            .compare_exchange(
-                false,
-                true,
-                core::sync::atomic::Ordering::Acquire,
-                core::sync::atomic::Ordering::Relaxed,
-            )
-            .is_ok()
-        {
-            let m = StaticMutex::new(SignalState::Empty, &raw mut MUTEX_S);
-            m.initialize(c"TestMutex", false).unwrap();
-            m
-        } else {
-            panic!("Parallel execution on different threads is not supported at the moment.");
-        };
+    fn new(event_flag_handle: EventFlagsGroupHandle, index: usize) -> Self {
         Self {
-            state: mm,
+            state_index: index,
             event_flag_handle: event_flag_handle,
         }
     }
 
     fn wait(&self) {
-        let mut state = self.state.lock(WaitForever).unwrap();
+        let mut binding = SIGNALS.lock(WaitForever).unwrap();
+        let state = binding.get_mut(self.state_index).unwrap();
         match *state {
-            // Notify() was called before we got here, consume it here without waiting and return immediately.
             SignalState::Notified => *state = SignalState::Empty,
-            // This should not be possible because our signal is created within a function and never handed out to any
-            // other threads. If this is the case, we have a serious problem so we panic immediately to avoid anything
-            // more problematic happening.
             SignalState::Waiting => {
                 unreachable!("Multiple threads waiting on the same signal: Open a bug report!");
             }
@@ -98,41 +85,38 @@ impl Signal {
                 // loop prevents incorrect spurious wakeups.
                 *state = SignalState::Waiting;
                 // Release the mutex.
-                drop(state);
                 // Wait for notification. TODO: What happens if we were preempted in between? Wait can only be called by
                 // the executor routine when the future was PENDING. What might happen is that between the Mutex drop and the
                 // waiting for the event flag a notification came in ie.
                 // MUTEX_UNLOCK --> Preempt Executor Thread --> notify_called on different thread.
                 // ThreadX seems to guarantee no spurious wakeups so we can assume that this thread is only woken up after
                 // the request flag is SIGNALED_X
-
+                let requested_flag = 0b1 << self.state_index;
+                drop(binding);
                 self.event_flag_handle
                     .get(
-                        0x1,
+                        requested_flag,
                         crate::event_flags::GetOption::WaitAllAndClear,
                         WaitForever,
                     )
                     .unwrap();
             }
+            SignalState::Unused => todo!(),
         }
     }
 
     fn notify(&self) {
-        let mut state = self.state.lock(WaitForever).unwrap();
+        let mut binding = SIGNALS.lock(WaitForever).unwrap();
+        let state = binding.get_mut(self.state_index).unwrap();
+
         match *state {
-            // The signal was already notified, no need to do anything because the thread will be waking up anyway
             SignalState::Notified => {}
-            // The signal wasn't notified but a thread isn't waiting on it, so we can avoid doing unnecessary work by
-            // skipping the condvar and leaving behind a message telling the thread that a notification has already
-            // occurred should it come along in the future.
             SignalState::Empty => *state = SignalState::Notified,
-            // The signal wasn't notified and there's a waiting thread. Reset the signal so it can be wait()'ed on again
-            // and wake up the thread. Because there should only be a single thread waiting, `notify_all` would also be
-            // valid.
             SignalState::Waiting => {
                 *state = SignalState::Empty;
                 self.event_flag_handle.publish(0x1).unwrap()
             }
+            SignalState::Unused => todo!(),
         }
     }
 }
@@ -146,42 +130,71 @@ impl alloc::task::Wake for Signal {
         self.notify();
     }
 }
+#[derive(Clone, Copy)]
+pub struct Executor {
+    event_handle: EventFlagsGroupHandle,
+}
 
-/// Block the thread until the future is ready.
-///
-/// # Example
-///
-/// ```
-/// let my_fut = async {};
-/// let result = pollster::block_on(my_fut);
-/// ```
-pub fn block_on<F: IntoFuture>(fut: F, event_flag_handle: EventFlagsGroupHandle) -> F::Output {
-    let mut fut = core::pin::pin!(fut.into_future());
+impl Executor {
+    pub fn new() -> Self {
+        // Initialize the mutex on first call
+        if EXECUTOR_INITIALIZED.load(core::sync::atomic::Ordering::Acquire) {
+            panic!("Executor initialized twice");
+        };
 
-    // Signal used to wake up the thread for polling as the future moves to completion. We need to use an `Arc`
-    // because, although the lifetime of `fut` is limited to this function, the underlying IO abstraction might keep
-    // the signal alive for far longer. `Arc` is a thread-safe way to allow this to happen.
-    // TODO: Investigate ways to reuse this `Arc<Signal>`... perhaps via a `static`?
-    let signal = alloc::sync::Arc::new(Signal::new(event_flag_handle));
+        SIGNALS.initialize(c"signal_mtx", false).unwrap();
+        let evt = EXECUTOR_EVENT.init(EventFlagsGroup::new());
+        let executor_event_handle = evt.initialize(c"ExecutorGroup").unwrap();
 
-    // Create a context that will be passed to the future.
-    let waker = Waker::from(alloc::sync::Arc::clone(&signal));
-    let mut context = Context::from_waker(&waker);
+        EXECUTOR_INITIALIZED.store(true, core::sync::atomic::Ordering::Release);
 
-    // Poll the future to completion
-    let item = loop {
-        match fut.as_mut().poll(&mut context) {
-            Poll::Pending => signal.wait(),
-            Poll::Ready(item) => break item,
+        Executor {
+            event_handle: executor_event_handle,
         }
-    };
-    // After the block_on is done we drop the mutex so we can reuse it.
-    // TODO: Check orderings, implement error cases
-    let _ = SIGNAL_IN_USE.compare_exchange(
-        true,
-        false,
-        core::sync::atomic::Ordering::Relaxed,
-        core::sync::atomic::Ordering::Relaxed,
-    );
-    item
+    }
+    /// Block the thread until the future is ready.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let my_fut = async {};
+    /// let result = pollster::block_on(my_fut);
+    /// ```
+    pub fn block_on<F: IntoFuture>(&self, fut: F) -> F::Output {
+        let mut fut = core::pin::pin!(fut.into_future());
+
+        let unused_index = {
+            let mut signals = SIGNALS.lock(WaitForever).unwrap();
+            let idx = signals
+                .into_iter()
+                .position(|p| SignalState::Unused == p)
+                .expect("No free task slots");
+            *signals.get_mut(idx).unwrap() = SignalState::Empty;
+            idx
+        };
+
+        // Signal used to wake up the thread for polling as the future moves to completion. We need to use an `Arc`
+        // because, although the lifetime of `fut` is limited to this function, the underlying IO abstraction might keep
+        // the signal alive for far longer. `Arc` is a thread-safe way to allow this to happen.
+        // TODO: Investigate ways to reuse this `Arc<Signal>`... perhaps via a `static`?
+        let signal = alloc::sync::Arc::new(Signal::new(self.event_handle, unused_index));
+
+        // Create a context that will be passed to the future.
+        let waker = Waker::from(alloc::sync::Arc::clone(&signal));
+        let mut context = Context::from_waker(&waker);
+
+        // Poll the future to completion
+        let item = loop {
+            match fut.as_mut().poll(&mut context) {
+                Poll::Pending => signal.wait(),
+                Poll::Ready(item) => break item,
+            }
+        };
+
+        // Reset the signal
+        let mut signals = SIGNALS.lock(WaitForever).unwrap();
+        *signals.get_mut(unused_index).unwrap() = SignalState::Unused;
+
+        item
+    }
 }

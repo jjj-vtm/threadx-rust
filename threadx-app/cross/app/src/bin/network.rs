@@ -29,7 +29,8 @@ use threadx_app::utransport::LocalUTransport;
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::GetOption::*;
 use threadx_rs::event_flags::{EventFlagsGroup, EventFlagsGroupHandle};
-use threadx_rs::executor::block_on;
+
+use threadx_rs::executor::Executor;
 use threadx_rs::mutex::Mutex;
 use threadx_rs::queue::{Queue, QueueReceiver, QueueSender};
 use threadx_rs::thread::{self, sleep};
@@ -91,8 +92,6 @@ static QUEUE_MEM: StaticCell<[u8; 128]> = StaticCell::new();
 
 static EVENT_GROUP: StaticCell<EventFlagsGroup> = StaticCell::new();
 static DISPLAY: StaticCell<Mutex<Option<DisplayType<I2CBus>>>> = StaticCell::new();
-
-static EXECUTOR_EVENT: StaticCell<EventFlagsGroup> = StaticCell::new();
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -260,7 +259,8 @@ pub fn do_network(
     display: &Mutex<Option<DisplayType<I2CBus>>>,
 ) -> ! {
     defmt::println!("Initializing Network");
-
+    // Initialize the globlal async executor
+    let executor = Executor::new();
     let mut display = display.lock(WaitForever).unwrap().take().unwrap();
     print_text("WLAN()\nMQTT()", &mut display);
     let network = ThreadxTcpWifiNetwork::initialize("", "");
@@ -285,9 +285,6 @@ pub fn do_network(
         .publish(FlagEvents::WifiConnected as u32)
         .unwrap();
 
-    let evt = EXECUTOR_EVENT.init(EventFlagsGroup::new());
-    let executor_event_handle = evt.initialize(c"ExecutorGroup").unwrap();
-
     loop {
         // Need to poll the transport in order to keep it connected
         transport.poll();
@@ -299,7 +296,7 @@ pub fn do_network(
                 let mut umessage = UMessage::default();
                 umessage.payload.replace(evt.into());
 
-                let _res = block_on(transport.send(umessage), executor_event_handle);
+                let _res = executor.block_on(transport.send(umessage));
             }
         } else {
             print_text("WLAN(x)\nMQTT()", &mut display);

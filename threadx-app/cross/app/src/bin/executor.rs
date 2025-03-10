@@ -16,14 +16,13 @@ use defmt::println;
 use embedded_graphics::{
     mono_font::{ascii::FONT_6X10, MonoTextStyleBuilder},
     pixelcolor::BinaryColor,
-    prelude::*,
 };
 use prost::Message;
 use static_cell::StaticCell;
 use threadx_app::uprotocol_v1::{UAttributes, UMessage};
 use threadx_rs::allocator::ThreadXAllocator;
 use threadx_rs::event_flags::EventFlagsGroup;
-use threadx_rs::executor::block_on;
+use threadx_rs::executor::{self, Executor};
 use threadx_rs::pool::BytePool;
 
 use threadx_rs::thread::{sleep, Thread};
@@ -39,7 +38,6 @@ static THREAD2: StaticCell<Thread> = StaticCell::new();
 
 static BP_MEM: StaticCell<[u8; 2048]> = StaticCell::new();
 static HEAP: StaticCell<[u8; 1024]> = StaticCell::new();
-static EXECUTOR_EVENT: StaticCell<EventFlagsGroup> = StaticCell::new();
 
 static BOARD: Mutex<RefCell<Option<BoardMxAz3166<I2CBus>>>> = Mutex::new(RefCell::new(None));
 
@@ -68,17 +66,16 @@ fn main() -> ! {
             let heap: Aligned<[u8; 1024]> = Aligned([0; 1024]);
             let heap_mem = HEAP.init_with(|| heap.0);
             GLOBAL.initialize(heap_mem).unwrap();
-
-            let evt = EXECUTOR_EVENT.init(EventFlagsGroup::new());
-            let event_handle = evt.initialize(c"ExecutorGroup").unwrap();
+            let executor = Executor::new();
 
             let thread2_fn = Box::new(move || {
+
                 // Get the display out out the board structure
                 let text_style = MonoTextStyleBuilder::new()
                     .font(&FONT_6X10)
                     .text_color(BinaryColor::On)
                     .build();
-                //block_on(NeverFinished {}, event_handle);
+               // executor.block_on(NeverFinished {});
                 let ua = UAttributes::default();
                 let mut u_m = UMessage::default();
 
@@ -86,8 +83,8 @@ fn main() -> ! {
                 let mut buf = [0u8; 24];
                 let _ = UMessage::encode(&u_m, &mut buf.as_mut_slice()).unwrap();
 
-                block_on(test_async(), event_handle);
                 loop {
+                    executor.block_on(test_async());
                     interrupt::free(|cs| {
                         let mut binding = BOARD.borrow(cs).borrow_mut();
                         let board = binding.as_mut().unwrap();
@@ -95,7 +92,7 @@ fn main() -> ! {
                         let deg = hts221.temperature_x8(&mut board.i2c_bus.unwrap()).unwrap()
                             as f32
                             / 8.0;
-                        println!("Current temperature: {}", deg);
+                        // println!("Current temperature: {}", deg);
                     });
                     let _ = sleep(Duration::from_secs(5));
                 }
