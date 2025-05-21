@@ -84,7 +84,6 @@ fn main() {
 
     // Build threadx
     let mut cfg = Config::new(&src_path);
-
     cfg.define("CMAKE_TOOLCHAIN_FILE", toolchain_file)
         .generator("Ninja")
         .build_target("threadx")

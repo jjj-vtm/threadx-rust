@@ -285,7 +285,7 @@ pub fn do_network(
     }
     let network = network.unwrap();
     defmt::info!("Network initialized"); // 192.168.1.47
-    let remote_addr = SocketAddr::new(core::net::IpAddr::V4(Ipv4Addr::new(192, 168, 2, 100)), 1883);
+    let remote_addr = SocketAddr::new(core::net::IpAddr::V4(Ipv4Addr::new(5, 196, 78, 28)), 1883);
     let mut buffer = [0u8; 512];
     let mqtt_cfg = ConfigBuilder::new(IpBroker::new(remote_addr.ip()), &mut buffer)
         .keepalive_interval(60)

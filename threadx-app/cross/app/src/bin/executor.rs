@@ -185,7 +185,7 @@ fn main() -> ! {
 
             let _ = display_thread
                 .initialize_with_autostart_box(
-                    c"measure_thread",
+                    c"display_thread",
                     display_task,
                     display_thread_stack,
                     1,
