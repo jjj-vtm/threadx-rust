@@ -230,7 +230,7 @@ impl ThreadxTcpWifiNetwork {
         let mut ssid: [u8; 32] = [0u8; 32];
         ssid[..ssid_str.len()].copy_from_slice(ssid_b);
         let ssid = wiced_ssid_t {
-            length: ssid_str.len() as u8,
+            length: u8::try_from(ssid_str.len()).expect("SSID too long"),
             value: ssid,
         };
 
@@ -239,7 +239,7 @@ impl ThreadxTcpWifiNetwork {
             &raw const ssid,
             wiced_security_t_WICED_SECURITY_WPA2_AES_PSK,
             pw.as_ptr(),
-            pw.len() as u8,
+            u8::try_from(pw.len()).expect("PW too long"),
             core::ptr::null_mut(),
             wwd_interface_t_WWD_STA_INTERFACE
         ))?;
@@ -372,7 +372,7 @@ impl TcpClientStack for ThreadxTcpWifiNetwork {
         nx_checked_call!(_nx_packet_data_append(
             packet_ptr,
             buffer.as_ptr().cast_mut().cast(),
-            buffer.len() as u32,
+            u32::try_from(buffer.len()).unwrap(),
             POOL[TX_IDX].as_mut_ptr(),
             NX_WAIT_FOREVER
         ))?;

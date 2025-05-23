@@ -37,8 +37,7 @@ pub trait LowLevelInit {
     fn low_level_init(ticks_per_second: u32) -> Self;
 }
 
-// cortexm-rt crate defines the _stack_start function. Due to the action of flip-link, the stack pointer
-// is moved lower down in memory after leaving space for the bss and data sections.
+// cortexm-rt crate defines _stack_start. 
 unsafe extern "C" {
     static _stack_start: u32;
 }
