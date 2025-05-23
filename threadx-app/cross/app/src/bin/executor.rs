@@ -1,15 +1,16 @@
 #![no_main]
 #![no_std]
 
+use core::fmt::Write;
+
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicI16, AtomicU8};
+use heapless::String;
 use threadx_rs::select::select;
 
 use core::time::Duration;
 
-use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
-use alloc::string::ToString;
 use board::{BoardMxAz3166, I2CBus, LowLevelInit};
 
 use cortex_m::interrupt::Mutex;
@@ -77,7 +78,7 @@ fn main() -> ! {
 
             let heap_mem = HEAP.init_with(|| [0u8; 1024]);
             GLOBAL.initialize(heap_mem).unwrap();
-            let executor = Executor::new();
+            let executor = Executor::new().expect("Could not initialize executor");
 
             let measure_task = Box::new(move || {
                 let (mut hts221, mut i2c) = extract_temperature_peripherals();
@@ -109,8 +110,8 @@ fn main() -> ! {
                             btn_b.wait_for_button_pressed(),
                         );
                         let button_pressed = match button_pressed.await {
-                            threadx_rs::either::Either::Left(_) => board::BUTTONS::ButtonA,
-                            threadx_rs::either::Either::Right(_) => board::BUTTONS::ButtonB,
+                            threadx_rs::either::Either::Left(()) => board::BUTTONS::ButtonA,
+                            threadx_rs::either::Either::Right(()) => board::BUTTONS::ButtonB,
                         };
 
                         match button_pressed {
@@ -126,7 +127,7 @@ fn main() -> ! {
                             DisplayState::Temperature => DisplayState::Welcome,
                         };
                         DISPLAY_STATE.store(new_state as u8, core::sync::atomic::Ordering::Relaxed);
-                    });
+                    }).expect("Error on executor, stopping thread");
                 }
             });
 
@@ -160,13 +161,12 @@ fn main() -> ! {
                             .unwrap();
                         }
                         DisplayState::Temperature => {
-                            let mut text = "temperature: \n".to_owned();
-                            let temp = (f32::from(
-                                TEMP_MEASURE.load(core::sync::atomic::Ordering::Relaxed),
-                            ) / 8.0)
-                                .to_string();
-                            text.push_str(&temp);
-                            text.push('C');
+                            let mut text: String<64> = String::new();
+                            let temp =
+                                f32::from(TEMP_MEASURE.load(core::sync::atomic::Ordering::Relaxed))
+                                    / 8.0;
+
+                            let _res = writeln!(&mut text, "Temperature:\n  {temp} C");
 
                             Text::with_baseline(&text, Point::zero(), text_style, Baseline::Top)
                                 .draw(&mut display)

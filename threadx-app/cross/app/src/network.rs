@@ -406,7 +406,7 @@ impl TcpClientStack for ThreadxTcpWifiNetwork {
             // Check if the packet fits into the user supplied buffer
 
             assert!(
-                packet.nx_packet_length < self.recv_int_buf.len().try_into().unwrap(),
+                packet.nx_packet_length <= self.recv_int_buf.len().try_into().unwrap(),
                 "Intermediate buffer too small"
             );
 

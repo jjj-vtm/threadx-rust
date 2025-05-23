@@ -275,7 +275,7 @@ pub fn do_network(
 ) -> ! {
     defmt::info!("Initializing Network");
     // Initialize the globlal async executor
-    let executor = Executor::new();
+    let executor = Executor::new().expect("Could not initialize the async executor");
     let mut display = display.lock(WaitForever).unwrap().take().unwrap();
     print_text("WLAN()\nMQTT()", &mut display);
     let network = ThreadxTcpWifiNetwork::initialize("", "");
@@ -284,7 +284,9 @@ pub fn do_network(
         panic!();
     }
     let network = network.unwrap();
-    defmt::info!("Network initialized"); // 192.168.1.47
+    defmt::info!("Network initialized"); 
+
+    // Use public Mosquitto broker (unauthenticated, unencrypted)
     let remote_addr = SocketAddr::new(core::net::IpAddr::V4(Ipv4Addr::new(5, 196, 78, 28)), 1883);
     let mut buffer = [0u8; 512];
     let mqtt_cfg = ConfigBuilder::new(IpBroker::new(remote_addr.ip()), &mut buffer)
