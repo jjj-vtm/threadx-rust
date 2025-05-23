@@ -1,5 +1,5 @@
-use super::error::TxError;
 use super::WaitOption;
+use super::error::TxError;
 use crate::tx_checked_call;
 use core::cell::UnsafeCell;
 use core::ffi::CStr;
@@ -23,6 +23,7 @@ pub struct Mutex<T> {
     initialized: bool,
     _phantom: PhantomPinned,
 }
+
 /// Safety: Initialization is done via a &mut reference hence thread safe
 unsafe impl<T: Send> Send for Mutex<T> {}
 unsafe impl<T: Send> Sync for Mutex<T> {}
@@ -60,6 +61,13 @@ impl<T> Drop for MutexGuard<'_, T> {
 pub enum MutexError {
     MutexError(TxError),
     PoisonError,
+    Uninitialized,
+}
+
+impl From<TxError> for MutexError {
+    fn from(value: TxError) -> Self {
+       MutexError::MutexError(value) 
+    }
 }
 
 impl<T> Mutex<T> {
@@ -99,19 +107,18 @@ impl<T> Mutex<T> {
     // Safety: Since we use only immutable references we do not need to use pin
     pub fn lock(&self, wait_option: WaitOption) -> Result<MutexGuard<'_, T>, MutexError> {
         if !self.initialized {
-            return Err(MutexError::PoisonError);
+            return Err(MutexError::Uninitialized);
         }
-        let mutex_ptr = self.mutex.get();
-        if let Some(mutex_ptr) = unsafe { mutex_ptr.as_mut() } {
-            let mutex_ptr = mutex_ptr.as_mut_ptr();
-            let result = tx_checked_call!(_tx_mutex_get(mutex_ptr, wait_option as u32));
-            match result {
-                Ok(_) => Ok(MutexGuard { mutex: self }),
-                Err(e) => Err(MutexError::MutexError(e)),
-            }
-        } else {
-            return Err(MutexError::PoisonError);
-        }
+        // Safety: Since the structure is initialized we know that mutex_ptr is valid.
+        let mutex_ptr = unsafe {
+            self.mutex
+                .get()
+                .as_mut()
+                .expect("Invalid mutex pointer")
+                .assume_init_mut()
+        };
+        tx_checked_call!(_tx_mutex_get(mutex_ptr, wait_option as u32))?;
+        Ok(MutexGuard { mutex: self })
     }
 }
 impl<T> Drop for Mutex<T> {

@@ -76,8 +76,11 @@ impl embedded_hal::i2c::I2c for I2CBus {
         operations: &mut [embedded_hal::i2c::Operation<'_>],
     ) -> Result<(), Self::Error> {
         cortex_m::interrupt::free(|cs| {
-            let mut binding = self.i2c.borrow(cs).borrow_mut();
-            let bus = binding.as_mut().unwrap();
+            let mut bus = self.i2c.borrow(cs).borrow_mut();
+            let Some(bus) = bus.as_mut() else {
+                defmt::warn!("I2C bus not initialized or taken");
+                return Err(stm32f4xx_hal::i2c::Error::Bus);
+            };
             bus.transaction_slice(address, operations)
         })
     }
@@ -98,7 +101,7 @@ impl LowLevelInit for BoardMxAz3166<I2CBus> {
 
             defmt::info!("Stack size {}", stack_start.wrapping_sub(0x2000_0000));
         }
-        let p = pac::Peripherals::take().unwrap();
+        let p = pac::Peripherals::take().expect("PAC peripherals already taken");
 
         let rcc = p.RCC.constrain();
         // Setup clocks. Reference (https://github.com/Eclipse-SDV-Hackathon-Chapter-Two/challenge-threadx-and-beyond/tree/main)
@@ -111,7 +114,7 @@ impl LowLevelInit for BoardMxAz3166<I2CBus> {
             .use_hse(Hertz::MHz(26))
             .freeze();
 
-        let cp = cortex_m::Peripherals::take().unwrap();
+        let cp = cortex_m::Peripherals::take().expect("CortexM Peripherals already taken");
 
         let mut syst = cp.SYST;
         let mut dcb = cp.DCB;
@@ -161,13 +164,13 @@ impl LowLevelInit for BoardMxAz3166<I2CBus> {
         let hts221 = hts221::Builder::new()
             .with_data_rate(hts221::DataRate::Continuous1Hz)
             .build(&mut bus)
-            .unwrap();
+            .expect("HTS221 could not be initialized");
 
         let interface: I2CInterface<I2CBus> = I2CDisplayInterface::new(bus);
 
         let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
             .into_buffered_graphics_mode();
-        display.init().unwrap();
+        display.init().expect("Display could not be initialized");
 
         //Set up the priorities for SysTick and PendSV and SVC
         unsafe {
