@@ -31,13 +31,13 @@ extern crate alloc;
 static GLOBAL: ThreadXAllocator = ThreadXAllocator::new();
 
 static DISPLAY_THREAD: StaticCell<Thread> = StaticCell::new();
-static DISPLAY_THREAD_STACK: StaticCell<[u8; 2048]> = StaticCell::new();
+static DISPLAY_THREAD_STACK: StaticCell<[u8; 4096]> = StaticCell::new();
 
 static SWITCHER_THREAD: StaticCell<Thread> = StaticCell::new();
-static SWITCHER_THREAD_STACK: StaticCell<[u8; 512]> = StaticCell::new();
+static SWITCHER_THREAD_STACK: StaticCell<[u8; 2048]> = StaticCell::new();
 
 static MEASURE_THREAD: StaticCell<Thread> = StaticCell::new();
-static MEASURE_THREAD_STACK: StaticCell<[u8; 512]> = StaticCell::new();
+static MEASURE_THREAD_STACK: StaticCell<[u8; 2048]> = StaticCell::new();
 
 static HEAP: StaticCell<[u8; 1024]> = StaticCell::new();
 
@@ -72,9 +72,9 @@ fn main() -> ! {
         |mem_start| {
             defmt::info!("Define application. Memory starts at: {} ", mem_start);
             // Inefficient, creates array on the stack first.
-            let display_thread_stack = DISPLAY_THREAD_STACK.init_with(|| [0u8; 2048]);
-            let measure_thread_stack = MEASURE_THREAD_STACK.init_with(|| [0u8; 512]);
-            let switcher_thread_stack = SWITCHER_THREAD_STACK.init_with(|| [0u8; 512]);
+            let display_thread_stack = DISPLAY_THREAD_STACK.init_with(|| [0u8; 4096 ]);
+            let measure_thread_stack = MEASURE_THREAD_STACK.init_with(|| [0u8; 2048]);
+            let switcher_thread_stack = SWITCHER_THREAD_STACK.init_with(|| [0u8; 2048]);
 
             let heap_mem = HEAP.init_with(|| [0u8; 1024]);
             GLOBAL.initialize(heap_mem).unwrap();
