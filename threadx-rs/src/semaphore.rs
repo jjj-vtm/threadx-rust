@@ -1,7 +1,6 @@
 use super::{WaitOption, error::TxError};
 use crate::tx_checked_call;
 use core::{ffi::CStr, mem::MaybeUninit};
-use defmt::error;
 use num_traits::FromPrimitive;
 use threadx_sys::{
     _tx_semaphore_create, _tx_semaphore_delete, _tx_semaphore_get, _tx_semaphore_prioritize,

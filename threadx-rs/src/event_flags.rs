@@ -8,8 +8,6 @@ use crate::tx_checked_call;
 
 use super::error::TxError;
 use super::WaitOption;
-use defmt::error;
-use defmt::trace;
 use num_traits::FromPrimitive;
 
 #[derive(Copy, Clone)]

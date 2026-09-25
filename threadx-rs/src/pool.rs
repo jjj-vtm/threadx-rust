@@ -15,7 +15,6 @@ use threadx_sys::{
 use crate::tx_checked_call;
 
 use super::error::TxError;
-use defmt::error;
 use num_traits::FromPrimitive;
 
 pub struct BytePool(MaybeUninit<TX_BYTE_POOL>);
@@ -100,6 +99,7 @@ impl<'a> BytePoolHandle<'a> {
         .map(|_| MemoryBlock(unsafe { core::slice::from_raw_parts_mut(ptr as *mut u8, size) }))
     }    
 
+    // TODO: mem must be consumed!
     pub fn release(&self, mem: &mut [u8]) -> Result<(), TxError> {
         tx_checked_call!(_tx_byte_release(mem.as_mut_ptr() as *mut c_void))
     }

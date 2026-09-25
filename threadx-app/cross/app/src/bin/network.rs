@@ -75,16 +75,20 @@ static GLOBAL: ThreadXAllocator = ThreadXAllocator::new();
 static HEAP: StaticCell<[u8; 512]> = StaticCell::new();
 
 // Wifi thread globals
-static WIFI_THREAD_STACK: StaticCell<[u8; 8192]> = StaticCell::new();
+static WIFI_THREAD_STACK_SIZE: usize = 8192;
+static WIFI_THREAD_STACK: StaticCell<[u8; WIFI_THREAD_STACK_SIZE]> = StaticCell::new();
 static WIFI_THREAD: StaticCell<Thread> = StaticCell::new();
 
-static MEASURE_THREAD_STACK: StaticCell<[u8; 512]> = StaticCell::new();
+static MEASURE_THREAD_STACK_SIZE: usize = 512;
+static MEASURE_THREAD_STACK: StaticCell<[u8; MEASURE_THREAD_STACK_SIZE]> = StaticCell::new();
 static MEASURE_THREAD: StaticCell<Thread> = StaticCell::new();
 
 static BOARD: cortex_m::interrupt::Mutex<RefCell<Option<BoardMxAz3166<I2CBus>>>> =
     cortex_m::interrupt::Mutex::new(RefCell::new(None));
+
 static QUEUE: StaticCell<Queue<Event>> = StaticCell::new();
-static QUEUE_MEM: StaticCell<[u8; 128]> = StaticCell::new();
+static QUEUE_MEM_SIZE: usize = 128;
+static QUEUE_MEM: StaticCell<[u8; QUEUE_MEM_SIZE]> = StaticCell::new();
 
 static EVENT_GROUP: StaticCell<EventFlagsGroup> = StaticCell::new();
 static DISPLAY: StaticCell<Mutex<Option<DisplayType<I2CBus>>>> = StaticCell::new();
@@ -110,7 +114,9 @@ fn main() -> ! {
 
             let heap_mem = HEAP.init_with(|| [0u8; 512]);
 
-            GLOBAL.initialize(heap_mem).unwrap();
+            GLOBAL
+                .initialize(heap_mem)
+                .expect("Could not initialize global allocator");
 
             // Get the peripherals
             let display_ref = DISPLAY.init(Mutex::new(None));
@@ -121,14 +127,22 @@ fn main() -> ! {
             pinned_display_ref
                 .as_mut()
                 .initialize(c"display_mtx", false)
-                .unwrap();
+                .expect("Unable to initialize display mutex");
+
             let display = interrupt::free(|cs| {
                 let mut board = BOARD.borrow(cs).borrow_mut();
-                board.as_mut().unwrap().display.take().unwrap()
+                board
+                    .as_mut()
+                    .unwrap()
+                    .display
+                    .take()
+                    .expect("Display not initialized or taken")
             });
             {
                 // Temporary scope to hold the lock
-                let mut display_guard = pinned_display_ref.lock(WaitForever).unwrap();
+                let mut display_guard = pinned_display_ref
+                    .lock(WaitForever)
+                    .expect("Failed to get display lock");
                 display_guard.replace(display);
             }
             let (hts211, i2c) = interrupt::free(|cs| {
@@ -141,7 +155,7 @@ fn main() -> ! {
             });
 
             // Create communication queue
-            let qm = QUEUE_MEM.init_with(|| [0u8; 128]);
+            let qm = QUEUE_MEM.init_with(|| [0u8; QUEUE_MEM_SIZE]);
             let queue = QUEUE.init(Queue::new());
             let (sender, receiver) = queue.initialize(c"m_queue", qm).unwrap();
 
@@ -150,7 +164,7 @@ fn main() -> ! {
             let evt_handle = event_group.initialize(c"event_flag").unwrap();
 
             // Static Cell since we need an allocated but uninitialized block of memory
-            let wifi_thread_stack = WIFI_THREAD_STACK.init_with(|| [0u8; 8192]);
+            let wifi_thread_stack = WIFI_THREAD_STACK.init_with(|| [0u8; WIFI_THREAD_STACK_SIZE]);
             let wifi_thread = WIFI_THREAD.init(Thread::new());
 
             let _ = wifi_thread
@@ -165,7 +179,8 @@ fn main() -> ! {
                 .unwrap();
             defmt::info!("WLAN thread started");
 
-            let measure_thread_stack = MEASURE_THREAD_STACK.init_with(|| [0u8; 512]);
+            let measure_thread_stack =
+                MEASURE_THREAD_STACK.init_with(|| [0u8; MEASURE_THREAD_STACK_SIZE]);
             let measure_thread: &'static mut Thread = MEASURE_THREAD.init(Thread::new());
 
             let _ = measure_thread
@@ -264,7 +279,7 @@ fn print_text(text: &str, display: &mut DisplayType<I2CBus>) {
 }
 /// # Panics
 ///
-/// Will panic on nearly any kind of failure: 
+/// Will panic on nearly any kind of failure:
 ///     - Not being able to obtain the display lock
 ///     - Not being able to connect to WiFi or other network initialization issues
 ///   
@@ -278,13 +293,13 @@ pub fn do_network(
     let executor = Executor::new().expect("Could not initialize the async executor");
     let mut display = display.lock(WaitForever).unwrap().take().unwrap();
     print_text("WLAN()\nMQTT()", &mut display);
-    let network = ThreadxTcpWifiNetwork::initialize("", "");
+    let network = ThreadxTcpWifiNetwork::initialize("WLAN-131749", "5910487002250888");
     if network.is_err() {
         print_text("Failure :(", &mut display);
         panic!();
     }
     let network = network.unwrap();
-    defmt::info!("Network initialized"); 
+    defmt::info!("Network initialized");
 
     // Use public Mosquitto broker (unauthenticated, unencrypted)
     let remote_addr = SocketAddr::new(core::net::IpAddr::V4(Ipv4Addr::new(5, 196, 78, 28)), 1883);

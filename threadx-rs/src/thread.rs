@@ -9,7 +9,6 @@ use crate::time::TxTicks;
 use crate::tx_checked_call;
 
 use super::error::TxError;
-use defmt::error;
 use num_traits::FromPrimitive;
 
 extern crate alloc;
