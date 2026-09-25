@@ -43,8 +43,8 @@ impl Semaphore {
         }
         tx_checked_call!(_tx_semaphore_create(
             sem_ptr,
-            name.as_ptr() as *mut u8,
-            initial_count as u32
+            name.as_ptr().cast_mut(),
+            initial_count
         ))
         .map(|_| SemaphoreOwnerHandle::new(sem_ptr))
     }
@@ -81,7 +81,7 @@ impl SemaphoreOwner for SemaphoreOwnerHandle {
         tx_checked_call!(_tx_semaphore_delete(self.0))
     }
     fn get_semaphore_user(&self) -> SemaphoreUserHandle {
-        SemaphoreUserHandle(self.0.clone())
+        SemaphoreUserHandle(self.0)
     }
 }
 
@@ -109,7 +109,7 @@ unsafe extern "C" fn semaphore_cb_trampoline<F>(arg: *mut TX_SEMAPHORE)
 where
     F: Fn(SemaphoreUserHandle),
 {
-    let closure = unsafe { &mut *(arg as *mut F) };
+    let closure = unsafe { &mut *arg.cast::<F>() };
     closure(SemaphoreUserHandle(arg));
 }
 

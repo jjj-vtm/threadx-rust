@@ -52,7 +52,7 @@ unsafe fn HardFault(frame: &cortex_m_rt::ExceptionFrame) -> ! {
 
 
 #[repr(u32)]
-#[derive(Debug)]
+#[derive(Debug, defmt::Format)]
 pub enum NxError {
     PoolError = netx_sys::NX_POOL_ERROR,
     SocketClosed = netx_sys::NX_NOT_CONNECTED,

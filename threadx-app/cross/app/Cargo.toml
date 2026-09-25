@@ -15,80 +15,33 @@ harness = false
 
 [dependencies]
 board = { workspace = true }
-cortex-m = { workspace = true, features = ["critical-section-single-core"] }
-cortex-m-rt = { workspace = true}
-defmt = { workspace = true}
-defmt-rtt = { workspace = true}
-panic-probe = { workspace = true, features = ["print-defmt"] }
-cortex-m-semihosting = { workspace = true}
-threadx-sys = { workspace = true}
-netx-sys = { workspace = true}
-threadx-rs = { workspace = true}
-embedded-alloc = { workspace = true}
-thiserror-no-std = { workspace = true}  
-num-traits = {workspace = true, default-features = false}
-num-derive = {workspace = true}
-stm32f4xx-hal = {workspace = true,  features = ["stm32f412"]}
+cortex-m = { workspace = true }
+cortex-m-rt = { workspace = true }
+defmt = { workspace = true }
+defmt-rtt = { workspace = true }
+panic-probe = { workspace = true }
+cortex-m-semihosting = { workspace = true }
+threadx-sys = { workspace = true }
+netx-sys = { workspace = true }
+threadx-rs = { workspace = true }
+stm32f4xx-hal = { workspace = true }
+static_cell = { workspace = true }
+uuid = { workspace = true }
 embedded-nal = "0.9.0"
 # Use the ringbuffer implementation
-ringbuffer = {version = "0.15.0", default-features = false}
-embedded-graphics = "0.8.1"
-static_cell = "2.1.0"
-heapless = "0.8.0"
-prost = { version = "0.13.5", default-features = false, features = ["prost-derive"] }
-uuid = {version = "1.15.1", default-features = false}
-
-prost-types = { version = "0.13.5", default-features = false }
+ringbuffer = { version = "0.16.0", default-features = false }
+embedded-graphics = "0.8.2"
+heapless = "0.9.1"
+prost = { version = "0.14.1", default-features = false, features = ["derive"] }
+prost-types = { version = "0.14.1", default-features = false }
 trait-variant = "0.1.2"
 
-log-to-defmt = {version = "0.1.0", optional = true}
-minimq = {version = "0.10.0"}
-
-# Non workspace application specific dependencies start here
-## smoltcp = { version = "0.10.0", default-features = false, features = ["log","proto-ipv4"] }
+log-to-defmt = { version = "0.1.0", optional = true }
+minimq = { version = "0.10.0" }
 
 [dev-dependencies]
-defmt-test = "0.3"
+defmt-test = { workspace = true }
 
 [features]
 mqtt_logging = ["dep:log-to-defmt", "minimq/logging"]
-
-
-# cargo build/run
-[profile.dev]
-codegen-units = 1
-debug = 2
-debug-assertions = true # <-
-incremental = false
-opt-level = 'z'         # <-
-overflow-checks = true  # <-
-
-# cargo test
-[profile.test]
-codegen-units = 1
-debug = 2
-debug-assertions = true # <-
-incremental = false
-opt-level = 3           # <-
-overflow-checks = true  # <-
-
-# cargo build/run --release
-[profile.release]
-codegen-units = 1
-debug = 2
-debug-assertions = false # <-
-incremental = false
-lto = 'fat'
-opt-level = 3            # <-
-overflow-checks = false  # <-
-
-# cargo test --release
-[profile.bench]
-codegen-units = 1
-debug = 2
-debug-assertions = false # <-
-incremental = false
-lto = 'fat'
-opt-level = 3            # <-
-overflow-checks = false  # <-
 

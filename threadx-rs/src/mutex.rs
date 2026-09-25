@@ -10,7 +10,7 @@ use core::ops::DerefMut;
 use core::pin::Pin;
 use defmt::error;
 use num_traits::FromPrimitive;
-use thiserror_no_std::Error;
+use thiserror::Error;
 use threadx_sys::_tx_mutex_create;
 use threadx_sys::_tx_mutex_delete;
 use threadx_sys::_tx_mutex_get;
@@ -57,17 +57,14 @@ impl<T> Drop for MutexGuard<'_, T> {
         }
     }
 }
-#[derive(Error, Debug)]
+#[derive(Error, Debug, defmt::Format)]
 pub enum MutexError {
-    MutexError(TxError),
+    #[error("mutex call failed: {0}")]
+    MutexError(#[from] TxError),
+    #[error("mutex poisoned")]
     PoisonError,
+    #[error("mutex not initialized")]
     Uninitialized,
-}
-
-impl From<TxError> for MutexError {
-    fn from(value: TxError) -> Self {
-       MutexError::MutexError(value) 
-    }
 }
 
 impl<T> Mutex<T> {
@@ -96,8 +93,8 @@ impl<T> Mutex<T> {
         };
         tx_checked_call!(_tx_mutex_create(
             mutex_ptr,
-            name.as_ptr() as *mut u8,
-            inherit as u32
+            name.as_ptr().cast_mut(),
+            u32::from(inherit)
         ))?;
         // Safety: MutexGuard will only dereference to a T. The structure which must not move (TX_MUTEX) will not be moved.
         unsafe { self.as_mut().get_unchecked_mut().initialized = true };

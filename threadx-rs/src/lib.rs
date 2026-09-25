@@ -20,7 +20,6 @@ pub use threadx_sys::__tx_PendSVHandler as tx_pendsv_handler;
 pub use threadx_sys::_tx_timer_interrupt as tx_timer_interrupt;
 
 pub use either;
-/// Initialize ThreadX
 
 /// This callback is called by threadx for low level initialization.
 /// The callback should return a slice of memory that is available for the application to use.
@@ -38,7 +37,6 @@ pub type LowLevelInitCb = fn(ticks_per_second: u32);
 ///
 /// It is conventional in Threadx to create all your applications resources here and then start
 /// the threads that are part of your application.
-
 pub type AppDefineCb = fn(*mut u8);
 
 pub struct Builder {
@@ -106,7 +104,7 @@ unsafe extern "C" fn tx_application_define(mem_start: *mut c_void) {
     // and it can never be `None`
     // The kernel is started after this callback returns.
     unsafe {
-        DEFINE_CB.unwrap()(mem_start as *mut u8);
+        DEFINE_CB.unwrap()(mem_start.cast());
     }
 }
 #[macro_export]
@@ -115,9 +113,9 @@ macro_rules! tx_checked_call_no_log {
         {
             let ret = unsafe { $func($($arg),*) };
             if ret != threadx_sys::TX_SUCCESS {
-                crate::error::TxResult::Err(TxError::from_u32(ret).unwrap_or(TxError::Unknown))
+                $crate::error::TxResult::Err(TxError::from_u32(ret).unwrap_or(TxError::Unknown))
             } else {
-                crate::error::TxResult::Ok(())
+                $crate::error::TxResult::Ok(())
             }
         }
     }
@@ -133,10 +131,10 @@ macro_rules! tx_checked_call {
             if ret != threadx_sys::TX_SUCCESS {
 
                 error!("ThreadX call {} returned {}", stringify!($func), ret);
-                crate::error::TxResult::Err(TxError::from_u32(ret).unwrap_or(TxError::Unknown))
+                $crate::error::TxResult::Err(TxError::from_u32(ret).unwrap_or(TxError::Unknown))
             } else {
                 trace!("ThreadX call {} Success", stringify!($func));
-                crate::error::TxResult::Ok(())
+                $crate::error::TxResult::Ok(())
             }
         }
     }

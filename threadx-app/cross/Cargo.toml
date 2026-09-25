@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
   "app",
   "board",
@@ -10,22 +10,19 @@ members = [
 
 [workspace.dependencies]
 board = { path = "board" }
-cortex-m = { version = "0.7.5", features = ["critical-section-single-core"] }
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.5"
-defmt = "0.3.100"
-defmt-rtt = "0.4"
-panic-probe = { version = "0.3", features = ["print-defmt"] }
-cortex-m-semihosting = "0.5.0"
+defmt = "1.0"
+defmt-rtt = "1.0"
+panic-probe = { version = "1.0", features = ["print-defmt"] }
+defmt-test = "0.5"
+cortex-m-semihosting = "0.6.0"
 threadx-sys = { path = "../../threadx-sys"}
 netx-sys = { path = "../../netx-sys"}
-
 threadx-rs = { path = "../../threadx-rs"}
-embedded-alloc = "0.5.1"
-thiserror-no-std = "2.0.2"
-num-traits = {version = "0.2.17", default-features = false}
-num-derive = "0.4.1"
-stm32f4xx-hal = { version = "0.22.0", features = ["stm32f412"] }
-uuid = {version = "1.15.1", default-features = false}
+stm32f4xx-hal = { version = "0.23.0", features = ["stm32f412"] }
+uuid = {version = "1.18", default-features = false}
+static_cell = "2.1.1"
 # cargo build/run
 [profile.dev]
 codegen-units = 1

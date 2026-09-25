@@ -1,6 +1,5 @@
 use std::env;
-use std::path::PathBuf;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn main() {
     // Tell cargo to look for shared libraries in the specified directory
@@ -20,7 +19,7 @@ fn main() {
         .header(wiced_src_path.join("wiced_sdk.h").to_str().unwrap())
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.

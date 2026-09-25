@@ -293,7 +293,11 @@ pub fn do_network(
     let executor = Executor::new().expect("Could not initialize the async executor");
     let mut display = display.lock(WaitForever).unwrap().take().unwrap();
     print_text("WLAN()\nMQTT()", &mut display);
-    let network = ThreadxTcpWifiNetwork::initialize("WLAN-131749", "5910487002250888");
+    // WiFi credentials are provided at build time, e.g. `WIFI_SSID=.. WIFI_PASSWORD=.. cargo rrb network`
+    let network = ThreadxTcpWifiNetwork::initialize(
+        env!("WIFI_SSID", "Set WIFI_SSID to the SSID of your WiFi network"),
+        env!("WIFI_PASSWORD", "Set WIFI_PASSWORD to the password of your WiFi network"),
+    );
     if network.is_err() {
         print_text("Failure :(", &mut display);
         panic!();

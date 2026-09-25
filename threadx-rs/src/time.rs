@@ -15,9 +15,9 @@ impl From<Duration> for TxTicks {
     }
 }
 
-impl Into<u32> for TxTicks {
-    fn into(self) -> u32 {
-        self.0
+impl From<TxTicks> for u32 {
+    fn from(ticks: TxTicks) -> Self {
+        ticks.0
     }
 }
 

@@ -12,11 +12,11 @@ pub struct Queue<T: Copy + 'static>(MaybeUninit<TX_QUEUE>, core::marker::Phantom
 
 impl<T: core::marker::Copy + 'static> Queue<T> {
     // according to the threadx docs, the supported messages sizes are 1 to 16 32 bit words
-    const SIZE_OK: () =
-        assert!(size_of::<T>() >= size_of::<u32>() && size_of::<T>() <= (size_of::<u32>() * 16));
-
     pub const fn new() -> Self {
-        let _ = Self::SIZE_OK;
+        // ThreadX queue messages are 1 to 16 ULONGs
+        const {
+            assert!(size_of::<T>() >= size_of::<u32>() && size_of::<T>() <= (size_of::<u32>() * 16))
+        };
         Queue(core::mem::MaybeUninit::uninit(), core::marker::PhantomData)
     }
     //TODO: Queue must not necessary live for 'static but can live as long as the memory block does
@@ -29,9 +29,9 @@ impl<T: core::marker::Copy + 'static> Queue<T> {
         let queue_ptr = self.0.as_mut_ptr();
         tx_checked_call!(_tx_queue_create(
             queue_ptr,
-            name.as_ptr() as *mut u8,
+            name.as_ptr().cast_mut(),
             size_of::<T>() as ULONG,
-            queue_memory.as_mut_ptr() as *mut core::ffi::c_void,
+            queue_memory.as_mut_ptr().cast(),
             queue_memory.len() as ULONG
         ))
         .map(|_| {
@@ -47,7 +47,6 @@ impl<T: core::marker::Copy + 'static> Queue<T> {
 pub struct QueueSender<T>(*mut TX_QUEUE, core::marker::PhantomData<T>);
 /// Safety: QueueSender is Sync and Send since the internal pointer is not exposed and the calls to send/sync
 /// can be done from any Thread as per ThreadX documentation.
-
 unsafe impl<T> Send for QueueSender<T> {}
 unsafe impl<T> Sync for QueueSender<T> {}
 
@@ -59,21 +58,20 @@ unsafe impl<T> Sync for QueueReceiver<T> {}
 
 impl<T> QueueSender<T> {
     pub fn send(&self, message: T, wait: WaitOption) -> Result<(), TxError> {
-        let res = tx_checked_call!(_tx_queue_send(
+        tx_checked_call!(_tx_queue_send(
             self.0,
-            &message as *const T as *mut core::ffi::c_void,
+            (&raw const message).cast_mut().cast(),
             wait as ULONG
-        ));
-        res
+        ))
     }
 }
 
 impl<T> QueueReceiver<T> {
     pub fn receive(&self, wait: WaitOption) -> Result<T, TxError> {
-        let mut message = core::mem::MaybeUninit::uninit();
+        let mut message = core::mem::MaybeUninit::<T>::uninit();
         tx_checked_call_no_log!(_tx_queue_receive(
             self.0,
-            message.as_mut_ptr() as *mut core::ffi::c_void,
+            message.as_mut_ptr().cast(),
             wait as ULONG
         ))
         .map(|_| unsafe {

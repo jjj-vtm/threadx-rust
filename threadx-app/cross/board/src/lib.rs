@@ -17,7 +17,7 @@ use stm32f4xx_hal::{
     gpio::GpioExt,
     i2c::{I2c, Mode},
     pac::{self, I2C1},
-    rcc::RccExt,
+    rcc::{self, RccExt},
 };
 
 pub use embedded_hal::i2c;
@@ -102,16 +102,14 @@ impl LowLevelInit for BoardMxAz3166<I2CBus> {
         }
         let p = pac::Peripherals::take().expect("PAC peripherals already taken");
 
-        let rcc = p.RCC.constrain();
         // Setup clocks. Reference (https://github.com/Eclipse-SDV-Hackathon-Chapter-Two/challenge-threadx-and-beyond/tree/main)
-        let clocks = rcc
-            .cfgr
-            .sysclk(Hertz::MHz(96))
-            .hclk(Hertz::MHz(96))
-            .pclk1(Hertz::MHz(36))
-            .pclk2(Hertz::MHz(64))
-            .use_hse(Hertz::MHz(26))
-            .freeze();
+        let mut rcc = p.RCC.freeze(
+            rcc::Config::hse(Hertz::MHz(26))
+                .sysclk(Hertz::MHz(96))
+                .hclk(Hertz::MHz(96))
+                .pclk1(Hertz::MHz(36))
+                .pclk2(Hertz::MHz(64)),
+        );
 
         let cp = cortex_m::Peripherals::take().expect("CortexM Peripherals already taken");
 
@@ -127,9 +125,9 @@ impl LowLevelInit for BoardMxAz3166<I2CBus> {
         syst.enable_counter();
         syst.enable_interrupt();
 
-        let gpioa = p.GPIOA.split();
+        let gpioa = p.GPIOA.split(&mut rcc);
 
-        let mut syscfg = p.SYSCFG.constrain();
+        let mut syscfg = p.SYSCFG.constrain(&mut rcc);
         let mut exti = p.EXTI;
 
         let mut button_a = gpioa.pa4.into_input();
@@ -149,13 +147,13 @@ impl LowLevelInit for BoardMxAz3166<I2CBus> {
             NVIC::unmask(button_b.interrupt());
         }
 
-        let gpiob = p.GPIOB.split();
+        let gpiob = p.GPIOB.split(&mut rcc);
 
         // Configure I2C1
         let scl = gpiob.pb8;
         let sda = gpiob.pb9;
 
-        let i2c = I2c::new(p.I2C1, (scl, sda), Mode::standard(Hertz::kHz(400)), &clocks);
+        let i2c = I2c::new(p.I2C1, (scl, sda), Mode::standard(Hertz::kHz(400)), &mut rcc);
         cortex_m::interrupt::free(|cs| SHARED_BUS.borrow(cs).replace(Some(i2c)));
         let mut bus = I2CBus { i2c: &SHARED_BUS };
         defmt::info!("Low level init");

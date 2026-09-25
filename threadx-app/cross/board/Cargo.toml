@@ -15,23 +15,22 @@ test = false
 
 [dependencies]
 
-cortex-m = { workspace = true, features = ["critical-section-single-core"] }
-cortex-m-rt = { workspace = true}
-defmt = { workspace = true}
-defmt-rtt = { workspace = true}
-panic-probe = { workspace = true, features = ["print-defmt"] }
-cortex-m-semihosting = { workspace = true}
-threadx-sys = { workspace = true}
-threadx-rs = { workspace = true}
-stm32f4xx-hal = {workspace = true, version = "0.22.0", features = ["stm32f412"]}
-ssd1306 = "0.9.0"
+cortex-m = { workspace = true }
+cortex-m-rt = { workspace = true }
+defmt = { workspace = true }
+defmt-rtt = { workspace = true }
+panic-probe = { workspace = true }
+threadx-sys = { workspace = true }
+threadx-rs = { workspace = true }
+stm32f4xx-hal = { workspace = true }
+ssd1306 = "0.10.0"
 embedded-hal = "1.0.0"
 # Git dependency for embedded-hal 1.0 compatibility
 hts221 = { git = "https://github.com/Zelzahn/hts221.git" }
 
 
 [dev-dependencies]
-defmt-test = "0.3"
+defmt-test = { workspace = true }
 
 [features]
 # these features are required by defmt

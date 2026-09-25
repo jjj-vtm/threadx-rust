@@ -7,5 +7,5 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.38"
-xshell = "0.1.9"
+anyhow = "1.0.100"
+xshell = "0.2.7"

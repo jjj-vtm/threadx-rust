@@ -44,8 +44,8 @@ impl BytePool {
 
         tx_checked_call!(_tx_byte_pool_create(
             pool_ptr,
-            name.as_ptr() as *mut u8,
-            pool_memory.as_mut_ptr() as *mut core::ffi::c_void,
+            name.as_ptr().cast_mut(),
+            pool_memory.as_mut_ptr().cast(),
             pool_memory.len() as ULONG
         ))
         .map(|_| BytePoolHandle::new(pool_ptr, PhantomData))
@@ -88,20 +88,20 @@ impl<'a> BytePoolHandle<'a> {
         size: usize,
         wait: bool,
     ) -> Result<MemoryBlock<'a>, TxError> {
-        let mut ptr: *mut c_void = core::ptr::null_mut() as *mut c_void;
+        let mut ptr: *mut c_void = core::ptr::null_mut();
     
         tx_checked_call!(_tx_byte_allocate(
             self.pool_ptr,
-            &mut ptr,
+            &raw mut ptr,
             size as ULONG,
             if wait { TX_WAIT_FOREVER } else { TX_NO_WAIT }
         ))
-        .map(|_| MemoryBlock(unsafe { core::slice::from_raw_parts_mut(ptr as *mut u8, size) }))
+        .map(|_| MemoryBlock(unsafe { core::slice::from_raw_parts_mut(ptr.cast::<u8>(), size) }))
     }    
 
     // TODO: mem must be consumed!
     pub fn release(&self, mem: &mut [u8]) -> Result<(), TxError> {
-        tx_checked_call!(_tx_byte_release(mem.as_mut_ptr() as *mut c_void))
+        tx_checked_call!(_tx_byte_release(mem.as_mut_ptr().cast()))
     }
 
     pub fn delete(self) -> Result<(), TxError> {
@@ -126,9 +126,9 @@ impl BlockPool {
 
         tx_checked_call!(_tx_block_pool_create(
             pool_ptr,
-            name.as_ptr() as *mut u8,
+            name.as_ptr().cast_mut(),
             block_size as ULONG,
-            pool_memory.as_mut_ptr() as *mut core::ffi::c_void,
+            pool_memory.as_mut_ptr().cast(),
             pool_memory.len() as ULONG
         ))
         .map(|_| BlockPoolHandle(pool_ptr, PhantomData))
@@ -140,22 +140,22 @@ pub struct BlockPoolHandle<'a> (*mut TX_BLOCK_POOL, PhantomData<&'a [u8]>,
 
 impl<'memory> BlockPoolHandle<'memory> {
     pub fn allocate(&mut self, wait: bool) -> Result<&'memory mut [u8], TxError> {
-        let mut ptr: *mut c_void = core::ptr::null_mut() as *mut c_void;
+        let mut ptr: *mut c_void = core::ptr::null_mut();
         tx_checked_call!(_tx_block_allocate(
             self.0,
-            &mut ptr,
+            &raw mut ptr,
             if wait { TX_WAIT_FOREVER } else { TX_NO_WAIT }
         ))
         .map(|_| unsafe {
             core::slice::from_raw_parts_mut(
-                ptr as *mut u8,
+                ptr.cast::<u8>(),
                 (*self.0).tx_block_pool_block_size as usize,
             )
         })
     }
 
     pub fn release(&mut self, mem: &mut [u8]) -> Result<(), TxError> {
-        tx_checked_call!(_tx_block_release(mem.as_mut_ptr() as *mut c_void))
+        tx_checked_call!(_tx_block_release(mem.as_mut_ptr().cast()))
     }
 
     /*

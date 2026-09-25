@@ -75,6 +75,13 @@ static mut POOL: [MaybeUninit<NX_PACKET_POOL>; 2] = [
     core::mem::MaybeUninit::uninit(),
 ];
 
+/// Raw pointer to a packet pool. Goes through `&raw mut` so no `&mut` to the
+/// `static mut` is created while NetX / WICED may access the pool concurrently.
+fn pool_ptr(idx: usize) -> *mut NX_PACKET_POOL {
+    // Safety: Only a raw pointer is created, no reference. Indexing is bounds checked.
+    unsafe { (&raw mut POOL[idx]).cast() }
+}
+
 pub struct ThreadxTcpWifiNetwork {
     socket: Option<NetxTcpSocket>,
     recv_buffer: ConstGenericRingBuffer<u8, 512>,
@@ -139,7 +146,7 @@ impl ThreadxTcpWifiNetwork {
             .0
             .as_mut_ptr();
         nx_checked_call!(_nx_packet_pool_create(
-            POOL[TX_IDX].as_mut_ptr(),
+            pool_ptr(TX_IDX),
             name,
             WICED_LINK_MTU,
             pool_mem_ptr.cast(),
@@ -154,15 +161,15 @@ impl ThreadxTcpWifiNetwork {
             .as_mut_ptr();
 
         nx_checked_call!(_nx_packet_pool_create(
-            POOL[RX_IDX].as_mut_ptr(),
+            pool_ptr(RX_IDX),
             name,
             WICED_LINK_MTU,
             pool_mem_ptr.cast(),
             NETX_RX_POOL_SIZE as UINT
         ))?;
 
-        let pool_ptr = &raw mut POOL;
-        nx_checked_call!(wwd_buffer_init(pool_ptr.cast()))?;
+        let pools_ptr = &raw mut POOL;
+        nx_checked_call!(wwd_buffer_init(pools_ptr.cast()))?;
 
         nx_checked_call!(wwd_management_wifi_on(
             wiced_country_code_t_WICED_COUNTRY_WORLD_WIDE_XX
@@ -187,7 +194,7 @@ impl ThreadxTcpWifiNetwork {
             name,
             Ipv4Addr::new(0, 0, 0, 0).to_bits(),
             Ipv4Addr::new(255, 255, 255, 0).to_bits(),
-            POOL[TX_IDX].as_mut_ptr(),
+            pool_ptr(TX_IDX),
             Some(wiced_sta_netx_duo_driver_entry),
             netx_ip_mem_ptr.cast(),
             NETX_IP_STACK_SIZE as UINT,
@@ -298,10 +305,9 @@ impl ThreadxTcpWifiNetwork {
 }
 
 fn drain_to_buffer(buffer: &mut [u8], ringbuffer: &mut ConstGenericRingBuffer<u8, 512>) -> usize {
-    let buffer_len = buffer.len();
-    let drain_to = buffer_len.min(ringbuffer.len());
-    for v in ringbuffer.drain().take(drain_to).zip(0..drain_to) {
-        buffer[v.1] = v.0;
+    let drain_to = buffer.len().min(ringbuffer.len());
+    for (dst, src) in buffer.iter_mut().zip(ringbuffer.drain().take(drain_to)) {
+        *dst = src;
     }
     drain_to
 }
@@ -358,10 +364,10 @@ impl TcpClientStack for ThreadxTcpWifiNetwork {
         buffer: &[u8],
     ) -> embedded_nal::nb::Result<usize, Self::Error> {
         let mut packet_ptr: *mut NX_PACKET = ptr::null_mut();
-        let packet_ptr_ptr = ptr::addr_of_mut!(packet_ptr);
+        let packet_ptr_ptr = &raw mut packet_ptr;
 
         nx_checked_call!(_nx_packet_allocate(
-            POOL[TX_IDX].as_mut_ptr(),
+            pool_ptr(TX_IDX),
             packet_ptr_ptr,
             NX_IPV4_TCP_PACKET,
             NX_WAIT_FOREVER
@@ -373,7 +379,7 @@ impl TcpClientStack for ThreadxTcpWifiNetwork {
             packet_ptr,
             buffer.as_ptr().cast_mut().cast(),
             u32::try_from(buffer.len()).unwrap(),
-            POOL[TX_IDX].as_mut_ptr(),
+            pool_ptr(TX_IDX),
             NX_WAIT_FOREVER
         ))?;
 
@@ -417,31 +423,28 @@ impl TcpClientStack for ThreadxTcpWifiNetwork {
                     &raw mut bytes_copied,
                 )
             };
-            // If possible copy directly to the user buffer
-            if buffer.len() >= bytes_copied.try_into().unwrap() {
-                buffer.copy_from_slice(&self.recv_int_buf[0..bytes_copied as usize]);
-            } else {
-                for val in self.recv_int_buf.iter().take(bytes_copied as usize) {
-                    self.recv_buffer.push(*val);
-                }
-            }
 
             // NetXDuo wants us to release if NX_SUCCESS was returned upon receive
             nx_checked_call!(_nx_packet_release(packet_ptr))?;
-            if res == NX_SUCCESS {
-                Ok(drain_to_buffer(buffer, &mut self.recv_buffer))
-            } else {
-                Err(embedded_nal::nb::Error::Other(NetxTcpError::from(
+            if res != NX_SUCCESS {
+                return Err(embedded_nal::nb::Error::Other(NetxTcpError::from(
                     NxError::from_u32(res),
-                )))
+                )));
             }
+
+            // Copy as much as fits directly into the user buffer, keep the rest for the next call
+            let received = &self.recv_int_buf[..bytes_copied as usize];
+            let direct = received.len().min(buffer.len());
+            buffer[..direct].copy_from_slice(&received[..direct]);
+            self.recv_buffer.extend(received[direct..].iter().copied());
+            Ok(direct)
         } else if res == NX_NO_PACKET {
-            return Err(embedded_nal::nb::Error::WouldBlock);
+            Err(embedded_nal::nb::Error::WouldBlock)
         } else {
             defmt::info!("Receive error: {}", res);
-            return Err(embedded_nal::nb::Error::Other(NetxTcpError::from(
+            Err(embedded_nal::nb::Error::Other(NetxTcpError::from(
                 NxError::from_u32(res),
-            )));
+            )))
         }
     }
 

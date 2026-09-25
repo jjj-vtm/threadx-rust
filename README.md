@@ -23,11 +23,13 @@ Goto `threadx-app/cross/app` and run:
 
 This examples connects to a WiFi Network and to an MQTT5 broker and regularly publishes the current temperature as uMessage (see: Link to uProtocol). 
 
-In the `network.rs` example adapt the SSID, WLAN-Passwort and the MQTT settings accordingly.  
+The WiFi credentials are read at build time from the `WIFI_SSID` and `WIFI_PASSWORD` environment variables, so they never end up in the source. Adapt the MQTT settings in the `network.rs` example accordingly.
 
 Goto `threadx-app/cross/app` and run:
 
-`cargo run --release --target thumbv7em-none-eabihf --bin network`
+`WIFI_SSID=<ssid> WIFI_PASSWORD=<password> cargo run --release --target thumbv7em-none-eabihf --bin network`
+
+Because `cargo build` builds all binaries, the variables also need to be set when building the whole workspace.
 
 ## Shortcomings
 

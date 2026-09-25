@@ -2,7 +2,7 @@ use core::ffi::CStr;
 use core::mem::MaybeUninit;
 use core::time::Duration;
 
-use threadx_sys::{_tx_thread_create, _tx_thread_resume, TX_THREAD, ULONG};
+use threadx_sys::{_tx_thread_create, _tx_thread_resume, TX_THREAD, UINT, ULONG};
 use threadx_sys::{_tx_thread_delete, _tx_thread_sleep, _tx_thread_suspend};
 
 use crate::time::TxTicks;
@@ -65,10 +65,10 @@ impl Thread {
         tx_checked_call!(_tx_thread_create(
             self.tx_struct.as_mut_ptr(),
             // TODO: Ensure that threadx api does not modify the name.
-            name.as_ptr() as *mut u8,
+            name.as_ptr().cast_mut(),
             Some(thread_box_callback_trampoline),
             entry_function_addr,
-            stack.as_mut_ptr() as *mut core::ffi::c_void,
+            stack.as_mut_ptr().cast(),
             stack.len() as ULONG,
             priority as ULONG,
             preempt_threshold as ULONG,
@@ -99,15 +99,15 @@ impl Thread {
         tx_checked_call!(_tx_thread_create(
             // TODO: Ensure that threadx api does not modify this
             self.tx_struct.as_mut_ptr(),
-            name.as_ptr() as *mut u8,
+            name.as_ptr().cast_mut(),
             entry_function,
             arg,
-            stack.as_mut_ptr() as *mut core::ffi::c_void,
+            stack.as_mut_ptr().cast(),
             stack.len() as ULONG,
             priority as ULONG,
             preempt_threshold as ULONG,
             time_slice as ULONG,
-            if auto_start { 1 } else { 0 }
+            UINT::from(auto_start)
         ))
         .map(|_| Thread {
             tx_struct: self.tx_struct,

@@ -69,12 +69,12 @@ impl Timer {
 
         let initial_ticks = TxTicks::from(initial_ticks).into();
         let reschedule_ticks = TxTicks::from(reschedule_ticks).into();
-        let auto_activate = if auto_activate { 1 } else { 0 };
+        let auto_activate = u32::from(auto_activate);
 
         let res = unsafe {
             _tx_timer_create(
                 timer,
-                name.as_ptr() as *mut u8,
+                name.as_ptr().cast_mut(),
                 Some(timer_callback_trampoline),
                 expiration_fn_addr,
                 initial_ticks,
@@ -103,12 +103,12 @@ impl Timer {
 
         let initial_ticks = TxTicks::from(initial_ticks).into();
         let reschedule_ticks = TxTicks::from(reschedule_ticks).into();
-        let auto_activate = if auto_activate { 1 } else { 0 };
+        let auto_activate = u32::from(auto_activate);
 
         let res = unsafe {
             _tx_timer_create(
                 timer,
-                name.as_ptr() as *mut u8,
+                name.as_ptr().cast_mut(),
                 expiration_function,
                 expiration_arg,
                 initial_ticks,

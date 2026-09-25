@@ -1,9 +1,8 @@
-#![allow(dead_code)]
 #![deny(unused_must_use)]
 
 use std::{env, path::PathBuf};
 
-use xshell::cmd;
+use xshell::{Shell, cmd};
 
 fn main() -> Result<(), anyhow::Error> {
     let args = env::args().skip(1).collect::<Vec<_>>();
@@ -28,29 +27,33 @@ fn test_all() -> Result<(), anyhow::Error> {
 }
 
 fn test_host() -> Result<(), anyhow::Error> {
-    let _p = xshell::pushd(root_dir())?;
-    cmd!("cargo test --workspace --exclude host-target-tests").run()?;
+    let sh = Shell::new()?;
+    sh.change_dir(root_dir());
+    cmd!(sh, "cargo test --workspace --exclude host-target-tests").run()?;
     Ok(())
 }
 
 fn test_host_target() -> Result<(), anyhow::Error> {
     flash()?;
 
-    let _p = xshell::pushd(root_dir())?;
-    cmd!("cargo test -p host-target-tests").run()?;
+    let sh = Shell::new()?;
+    sh.change_dir(root_dir());
+    cmd!(sh, "cargo test -p host-target-tests").run()?;
 
     Ok(())
 }
 
 fn test_target() -> Result<(), anyhow::Error> {
-    let _p = xshell::pushd(root_dir().join("cross"))?;
-    cmd!("cargo test -p target-tests").run()?;
+    let sh = Shell::new()?;
+    sh.change_dir(root_dir().join("cross"));
+    cmd!(sh, "cargo test -p target-tests").run()?;
     Ok(())
 }
 
 fn flash() -> Result<(), anyhow::Error> {
-    let _p = xshell::pushd(root_dir().join("cross"))?;
-    cmd!("cargo flash --chip STM32F103C8 --release").run()?;
+    let sh = Shell::new()?;
+    sh.change_dir(root_dir().join("cross"));
+    cmd!(sh, "cargo flash --chip STM32F103C8 --release").run()?;
     Ok(())
 }
 
